@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+
+{% block title %}User Settings{% endblock %}
+
+{% block content %}
+<h2>User Settings for {{ user.username }}</h2>
+
+{# Message display area (already added) #}
+{% if messages %}
+  <ul class="messages" style="list-style: none; padding: 0; margin: 1em 0;">
+    {% for message in messages %}
+      <li{% if message.tags %} class="{{ message.tags }}" style="padding: 10px; border: 1px solid; margin-bottom: 10px; border-radius: 4px; {% if message.level == 25 %} background-color: #dff0d8; border-color: #d6e9c6; color: #3c763d; {% elif message.level == 40 %} background-color: #f2dede; border-color: #ebccd1; color: #a94442; {% else %} background-color: #d9edf7; border-color: #bce8f1; color: #31708f;{% endif %}" {% endif %}>
+        {{ message }}
+      </li>
+    {% endfor %}
+  </ul>
+{% endif %}
+
+<hr>
+<h3>Default Weather Location</h3>
+{% if profile.default_location_name %}
+    <p>Your current default location is set to: <strong>{{ profile.default_location_name }}</strong></p>
+    <p>(Lat: {{ profile.default_latitude }}, Lon: {{ profile.default_longitude }})</p>
+{% else %}
+    <p>You have not set a default weather location.</p>
+{% endif %}
+
+{# Manual Location Form (already added) #}
+<form method="post" action="{% url 'accounts:settings' %}" style="margin-top: 1em;">
+    {% csrf_token %}
+    <label for="manual_location">Set/Update Default Location:</label><br>
+    <input type="text" id="manual_location" name="manual_location" placeholder="Enter City, State or ZIP Code" value="{{ profile.default_location_name|default:'' }}" required size="40">
+    <button type="submit" name="save_manual_location">Save Manual Location</button>
+</form>
+
+{# --- Add Browser Geolocation Button and Hidden Form --- #}
+<div style="margin-top: 2em;">
+    <button type="button" id="use-location-btn">Use My Current Location</button>
+    <span id="geo-status" style="margin-left: 10px; font-style: italic;"></span> {# For status messages #}
+</div>
+
+{# Hidden form to submit coordinates from browser geolocation #}
+<form method="post" action="{% url 'accounts:settings' %}" id="geo-form" style="display: none;">
+     {% csrf_token %}
+     <input type="hidden" name="geo_latitude" id="geo_latitude">
+     <input type="hidden" name="geo_longitude" id="geo_longitude">
+     {# Use a button name or hidden input to identify this form on the backend #}
+     <input type="hidden" name="save_geo_location" value="1">
+     {# No visible submit button needed, JS will submit this form #}
+</form>
+{# --- End Browser Geolocation Section --- #}
+
+{# --- Add JavaScript for Geolocation --- #}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const geoButton = document.getElementById('use-location-btn');
+    const geoStatus = document.getElementById('geo-status');
+    const geoForm = document.getElementById('geo-form');
+    const latInput = document.getElementById('geo_latitude');
+    const lonInput = document.getElementById('geo_longitude');
+
+    if (geoButton && geoStatus && geoForm && latInput && lonInput) {
+        geoButton.addEventListener('click', function() {
+            geoStatus.textContent = 'Requesting location...'; // Provide feedback
+
+            if (!navigator.geolocation) {
+                geoStatus.textContent = 'Geolocation is not supported by your browser.';
+            } else {
+                navigator.geolocation.getCurrentPosition(successCallback, errorCallback, {
+                    enableHighAccuracy: false, // Can set to true for more accuracy, potentially slower/more power
+                    timeout: 10000, // Wait 10 seconds
+                    maximumAge: 0 // Don't use a cached position
+                });
+            }
+        });
+    }
+
+    function successCallback(position) {
+        const latitude = position.coords.latitude;
+        const longitude = position.coords.longitude;
+
+        geoStatus.textContent = 'Location found! Saving...';
+        latInput.value = latitude;
+        lonInput.value = longitude;
+
+        // Submit the hidden form with the coordinates
+        geoForm.submit();
+    }
+
+    function errorCallback(error) {
+        let message = 'Error retrieving location: ';
+        switch(error.code) {
+            case error.PERMISSION_DENIED:
+                message += "User denied the request for Geolocation.";
+                break;
+            case error.POSITION_UNAVAILABLE:
+                message += "Location information is unavailable.";
+                break;
+            case error.TIMEOUT:
+                message += "The request to get user location timed out.";
+                break;
+            case error.UNKNOWN_ERROR:
+                message += "An unknown error occurred.";
+                break;
+        }
+        geoStatus.textContent = message;
+        console.error("Geolocation Error Code: " + error.code + ", Message: " + error.message);
+    }
+});
+</script>
+{# --- End Geolocation JavaScript --- #}
+
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+
+{% block title %}Login{% endblock %}
+
+{% block content %}
+<h2>Log In</h2>
+<form method="post">
+    {% csrf_token %} {# Important security tag #}
+    {{ form.as_p }} {# Renders the Django AuthenticationForm fields as paragraphs #}
+    <button type="submit">Log In</button>
+</form>
+<p style="margin-top: 1em;"><a href="#">Forgot password?</a></p> {# Link to password reset later #}
+<p><a href="{% url 'signup' %}">Need an account? Sign Up</a></p>
+{% endblock %}

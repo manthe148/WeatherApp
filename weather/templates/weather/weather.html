@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Weather Alerts - {{ location_name|default:"Weather" }}{% endblock %}
+
+{% block content %}
+<h1>Weather Alerts for {{ location_name|default:"Current Location" }}</h1>
+<p>Data retrieved: {% now "F j, Y, P" %}</p>
+
+{% if error_message %}
+    <div class="alert alert-danger" role="alert" style="color: red; border: 1px solid red; padding: 10px; margin-bottom: 15px;">
+        <strong>Error:</strong> {{ error_message }}
+    </div>
+{% endif %}
+
+{# Add the location input form #}
+	<form method="GET" action="{% url 'weather:alert_list' %}" style="margin-bottom: 20px;">
+    	    <label for="location">Enter Location (e.g., City, State or ZIP):</label>
+    	    <input type="text" id="location" name="location_query" value="{{ request.GET.location_query|default:'' }}" required>
+            <button type="submit">Get Alerts</button>
+        </form>
+    <hr>
+{# End of form #}
+
+{# Add the map container div with inline style for height #}
+<div id="map" style="height: 450px; margin-bottom: 25px; border: 1px solid #ccc;"></div>
+{# End map container #}
+
+
+{% if alerts %}
+    <h2>Active Alerts:</h2>
+    {# Add a container div for Flexbox layout #}
+    <div class="alerts-container">
+        {% for alert in alerts %}
+            <article class="alert-item alert-{{ alert.severity|lower|slugify|default:'unknown' }}">
+                <h3>{{ alert.headline|default:"No Headline" }}</h3>
+                <p><strong>Event:</strong> {{ alert.event|default:"N/A" }}</p>
+                <p><strong>Severity:</strong> {{ alert.severity|default:"N/A" }}</p>
+                <p><strong>Areas Affected:</strong> {{ alert.areaDesc|default:"N/A" }}</p>
+                <p><strong>Effective:</strong> {{ alert.effective|date:"F j, Y, P T"|default:"N/A" }}</p>
+                <p><strong>Expires:</strong> {{ alert.expires|date:"F j, Y, P T"|default:"N/A" }}</p>
+                <hr>
+                <p><strong>Description:</strong></p>
+                <p>{{ alert.description|safe|default:"No Description Available" }}</p>
+            </article>
+        {% empty %}
+            {# This content is better outside the flex container if it exists #}
+             <p style="width: 100%;">No active weather alerts found for this location.</p>
+        {% endfor %}
+    </div> {# End of alerts-container #}
+
+{% elif not error_message %}
+    <p>No active weather alerts found for this location.</p> {# Handles case where alerts list is missing/None #}
+{% endif %}
+
+<script>
+    // Pass Django context variables needed for JS to global JS variables
+    // Use default values just in case they are missing from context
+    const mapCenterLat = {{ latitude|default:36.44 }};
+    const mapCenterLon = {{ longitude|default:-95.28 }};
+</script>
+
+{% endblock %}

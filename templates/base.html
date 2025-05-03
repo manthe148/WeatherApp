@@ -1,0 +1,55 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}My Weather Site{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/style.css' %}"> {# Add this line #}
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="crossorigin=""/>
+</head>
+<body>
+    <header>
+        <nav>
+            <ul>
+                <li><a href="{% url 'pages:home' %}">Home</a></li>
+                <li><a href="{% url 'weather:alert_list' %}">Weather</a></li>
+                <li><a href="{% url 'pages:about' %}">About</a></li>
+                
+                 {# Add Login/Logout Links #}
+                 {% if user.is_authenticated %}
+                 {# User is logged in #}
+                     <li>|</li> {# Separator #}
+                     <li>User: {{ user.username }}</li>
+                     {# Add settings link - use 'accounts:settings' because it's in our accounts app #}
+                     <li><a href="{% url 'accounts:settings' %}">Settings</a></li>
+                     <li>
+                          {# Use a form that sends a POST request #}
+                          <form method="post" action="{% url 'accounts:logout' %}" style="display: inline;">
+                          {% csrf_token %} {# Required for POST requests in Django #}
+                          <button type="submit" class="link-button">Logout</button>
+                          </form>
+                     </li>
+                 {% else %}
+                 {# User is NOT logged in #}
+                     <li>|</li> {# Separator #}
+                     <li><a href="{% url 'accounts:login' %}">Login</a></li>
+                     {# We'll add a link to signup here later #}
+                     { <li><a href="{% url 'accounts:signup' %}">Sign Up</a></li> }
+                 {% endif %}
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        {% block content %}
+            <p>This is default content from base.html.</p>
+        {% endblock %}
+    </main>
+
+    <footer>
+        <p>&copy; 2025 My Weather Site</p>
+    </footer>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="{% static 'js/main.js' %}"></script>
+    </body>
+</html>

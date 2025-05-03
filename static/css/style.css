@@ -1,0 +1,153 @@
+/* static/css/style.css */
+
+body {
+    font-family: sans-serif;
+    background-color: #f8f9fa; /* Light gray background */
+    margin: 0;
+    padding: 0;
+}
+
+header {
+    background-color: #343a40; /* Dark background for header */
+    padding: 10px 20px;
+}
+
+nav ul {
+    list-style: none; /* Remove bullet points */
+    padding: 0;
+    margin: 0;
+}
+
+nav li {
+    display: inline-block; /* Make list items appear side-by-side */
+    margin-right: 15px;
+}
+
+nav a {
+    color: #ffffff; /* White text color */
+    text-decoration: none; /* Remove underline */
+    font-weight: bold;
+}
+
+nav a:hover {
+    color: #adb5bd; /* Lighter gray on hover */
+}
+
+/* Style for button-based logout link in nav */
+nav .link-button {
+    background: none;
+    border: none;
+    color: #ffffff; /* Match nav link color */
+    font-weight: bold; /* Match nav link font-weight */
+    padding: 0; /* Remove button padding */
+    cursor: pointer;
+    font-size: inherit; /* Use surrounding text size */
+    font-family: inherit; /* Use surrounding font family */
+    text-decoration: none; /* Looks like a link */
+    display: inline; /* Behaves like inline text */
+}
+
+nav .link-button:hover {
+    color: #adb5bd; /* Match nav link hover color */
+    text-decoration: underline; /* Underline on hover */
+}
+
+
+
+
+main {
+    padding: 20px; /* Add some padding around the main content */
+}
+
+footer {
+    margin-top: 40px;
+    padding: 20px;
+    text-align: center;
+    font-size: 0.9em;
+    color: #6c757d; /* Gray text */
+    border-top: 1px solid #dee2e6; /* Light border top */
+}
+
+
+/* --- Layout for Alert Items --- */
+
+@media (max-width: 768px){
+    .alerts-container {
+        display: flex;         /* Enables Flexbox */
+        flex-wrap: wrap;       /* Allows items to wrap onto the next line */
+        gap: 1.5em;            /* Creates space BETWEEN flex items (adjust value as needed) */
+                               /* Alternative: Use margin on items and negative margin on container */
+    }
+
+    .alert-item {
+        /* Existing styles */
+        border: 1px solid #ccc;
+        padding: 15px;
+        background-color: #f9f9f9;
+        border-left-width: 6px;
+        border-radius: 4px;
+
+        /* --- Flexbox Item Sizing for ~2 Columns --- */
+        flex-grow: 1;           /* Allow items to grow to fill space if only one */
+        flex-shrink: 1;         /* Allow items to shrink if needed */
+        /* Set the ideal starting width: 50% minus half the gap */
+        flex-basis: calc(50% - 0.75em);
+        /* Alternatively, using width: width: calc(50% - 0.75em); */
+
+        box-sizing: border-box; /* Ensures padding and border are included in the width calculation */
+        margin-bottom: 0;       /* Remove default bottom margin as 'gap' handles spacing */
+                                /* If not using 'gap', you might use margin: 0.75em; */
+    }
+
+}
+
+.alert-item h3 {
+    margin-top: 0;
+}
+/* Styles for individual alert items */
+.alert-item {
+    border: 1px solid #ccc;
+    margin-bottom: 15px;
+    padding: 15px;
+    background-color: #f9f9f9;
+    border-left-width: 6px; /* Make left border thicker for color coding */
+    border-radius: 4px; /* Slightly rounded corners */
+}
+
+.alert-item h3 {
+    margin-top: 0; /* Remove default top margin from heading */
+}
+
+/* --- Severity-Based Styles --- */
+/* NWS common severities - add more if needed based on API responses */
+
+/* Example: Warning (often red/orange in official maps) */
+.alert-severe {
+    border-left-color: #dc3545; /* Red */
+    background-color: #f8d7da; /* Light red background */
+}
+
+/* Example: Watch (often orange/yellow) */
+.alert-moderate{
+    border-left-color: #ffc107; /* Yellow/Orange */
+    background-color: #fff3cd; /* Light yellow background */
+}
+
+/* Example: Advisory (often blue/gray) */
+.alert-minor {
+    border-left-color: #0dcaf0; /* Cyan/Blue */
+    background-color: #cff4fc; /* Light cyan background */
+}
+
+/* Example: Statement (often gray) */
+.alert-unknown {
+     border-left-color: #6c757d; /* Gray */
+     background-color: #e2e3e5; /* Light gray background */
+}
+
+/* Fallback for unknown or other severities */
+ .alert-extreme {
+     border-left-color: #a30381; /* Gray */
+     background-color: #f3d0f0;
+ }
+
