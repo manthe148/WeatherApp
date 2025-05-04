@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+
+{% block title %}Subscription Canceled{% endblock %}
+
+{% block content %}
+<h2>Subscription Canceled</h2>
+<p>Your subscription process was canceled. You have not been charged.</p>
+<p><a href="{% url 'subscriptions:plan_selection' %}">View Plans Again</a></p>
+<p><a href="{% url 'pages:home' %}">Return to Homepage</a></p>
+{% endblock %}

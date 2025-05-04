@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+
+{% block title %}Choose Subscription Plan{% endblock %}
+
+{% block content %}
+<h2>Choose Your Subscription Plan</h2>
+
+{% if messages %}
+  {# Display messages if redirected here after an error #}
+  <ul class="messages" style="list-style: none; padding: 0; margin: 1em 0;">
+    {% for message in messages %}
+      <li{% if message.tags %} class="{{ message.tags }}" style="padding: 10px; border: 1px solid; margin-bottom: 10px; border-radius: 4px; {% if message.level == 40 %} background-color: #f2dede; border-color: #ebccd1; color: #a94442; {% else %} background-color: #d9edf7; border-color: #bce8f1; color: #31708f;{% endif %}" {% endif %}>
+        {{ message }}
+      </li>
+    {% endfor %}
+  </ul>
+{% endif %}
+
+<div class="plan-container" style="display: flex; flex-wrap: wrap; gap: 20px;">
+    {% for plan in plans %}
+        <div class="plan-card" style="border: 1px solid #ccc; padding: 20px; border-radius: 5px; flex: 1; min-width: 250px;">
+            <h3>{{ plan.name }}</h3>
+            <p style="font-size: 1.5em; font-weight: bold;">${{ plan.price|floatformat:2 }} / month</p> {# Assuming monthly for now #}
+            <p>{{ plan.features|linebreaksbr }}</p>
+
+            {# Form to initiate checkout for this specific plan #}
+            <form action="{% url 'subscriptions:create_checkout_session' %}" method="POST">
+                {% csrf_token %}
+                {# Pass the Stripe Price ID for the selected plan #}
+                <input type="hidden" name="price_id" value="{{ plan.stripe_price_id }}">
+                <button type="submit">Choose {{ plan.name }}</button>
+            </form>
+        </div>
+    {% empty %}
+        <p>No subscription plans are currently available.</p>
+    {% endfor %}
+</div>
+
+{# We can optionally use the publishable key here if using Stripe Elements later #}
+{# <script>const stripePublishableKey = "{{ stripe_publishable_key }}";</script> #}
+
+{% endblock %}

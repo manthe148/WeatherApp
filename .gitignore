@@ -68,6 +68,7 @@ env/
 ENV/
 env.bak/
 venv.bak/
+.env
 
 # Environment variables
 .env* # Ignore .env files, .env.prod, .env.dev etc.

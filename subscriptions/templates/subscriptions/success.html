@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+
+{% block title %}Subscription Success{% endblock %}
+
+{% block content %}
+<h2>Subscription Successful!</h2>
+<p>Thank you for subscribing! Your plan should be active shortly.</p>
+<p>(Note: In a production system, activation might depend on backend webhook processing.)</p>
+<p><a href="{% url 'pages:home' %}">Return to Homepage</a></p>
+<p><a href="{% url 'accounts:settings' %}">Go to Settings</a></p>
+{% endblock %}

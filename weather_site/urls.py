@@ -17,7 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from accounts import views as accounts_views # Import accounts views
-
+from accounts.views import ServiceWorkerView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -26,4 +26,6 @@ urlpatterns = [
     path('weather/', include('weather.urls')),
     path('accounts/', include('accounts.urls')),
     path('accounts/signup/', accounts_views.sign_up, name='signup'),
+   path('subscriptions/', include('subscriptions.urls')),
+    path('sw.js', ServiceWorkerView.as_view(), name='service_worker'),
 ]

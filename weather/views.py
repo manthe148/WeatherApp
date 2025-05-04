@@ -3,6 +3,10 @@ import requests
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 from decimal import Decimal, InvalidOperation
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+
+
 # Import Profile model if needed (likely not directly needed here if accessing via user)
 # from accounts.models import Profile
 
@@ -133,3 +137,26 @@ def get_weather_alerts(request):
     }
 
     return render(request, 'weather/weather.html', context)
+
+
+@login_required
+def premium_radar_view(request):
+    is_subscriber = False
+    # Check subscription status safely
+    try:
+        if hasattr(request.user, 'subscription') and request.user.subscription.is_active():
+             is_subscriber = True
+    except Exception as e:
+        print(f"Error checking subscription for {request.user.username} in premium_radar_view: {e}")
+        is_subscriber = False # Default to false on error
+
+    if is_subscriber:
+        # User is active subscriber, render the premium page
+        context = {} # Add any context needed for the premium radar later
+        # Ensure this template path is correct
+        return render(request, 'weather/premium_radar.html', context)
+    else:
+        # User is not an active subscriber, send message and redirect
+        messages.warning(request, "Access to Premium Radar requires an active subscription.")
+        # Redirect to the page where they can choose a plan
+        return redirect('subscriptions:plan_selection')

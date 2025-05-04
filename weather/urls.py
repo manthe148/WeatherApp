@@ -9,4 +9,6 @@ urlpatterns = [
     # Name this pattern 'alert_list' for potential use with {% url %} later.
     path('', views.get_weather_alerts, name='alert_list'),
     # Add other weather-related URLs here later (e.g., radar, forecast)
+    path('radar/premium/', views.premium_radar_view, name='premium_radar')
+
 ]

@@ -22,6 +22,7 @@
                      <li>User: {{ user.username }}</li>
                      {# Add settings link - use 'accounts:settings' because it's in our accounts app #}
                      <li><a href="{% url 'accounts:settings' %}">Settings</a></li>
+                     <li><a href="{% url 'weather:premium_radar' %}">Premium Radar</a></li>
                      <li>
                           {# Use a form that sends a POST request #}
                           <form method="post" action="{% url 'accounts:logout' %}" style="display: inline;">
@@ -36,6 +37,8 @@
                      {# We'll add a link to signup here later #}
                      { <li><a href="{% url 'accounts:signup' %}">Sign Up</a></li> }
                  {% endif %}
+
+                 <h3>The site is under construction, and may go down with out notice</h3>
             </ul>
         </nav>
     </header>
@@ -51,5 +54,6 @@
     </footer>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script src="{% static 'js/main.js' %}"></script>
+    {% block extra_js %}{% endblock %}
     </body>
 </html>

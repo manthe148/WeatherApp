@@ -1,113 +1,285 @@
 {% extends 'base.html' %}
+{% load static %} {# Ensure static is loaded #}
 
 {% block title %}User Settings{% endblock %}
 
 {% block content %}
 <h2>User Settings for {{ user.username }}</h2>
 
-{# Message display area (already added) #}
+{# Message display area - FIXED STYLE ATTRIBUTE #}
 {% if messages %}
   <ul class="messages" style="list-style: none; padding: 0; margin: 1em 0;">
     {% for message in messages %}
-      <li{% if message.tags %} class="{{ message.tags }}" style="padding: 10px; border: 1px solid; margin-bottom: 10px; border-radius: 4px; {% if message.level == 25 %} background-color: #dff0d8; border-color: #d6e9c6; color: #3c763d; {% elif message.level == 40 %} background-color: #f2dede; border-color: #ebccd1; color: #a94442; {% else %} background-color: #d9edf7; border-color: #bce8f1; color: #31708f;{% endif %}" {% endif %}>
+      <li{% if message.tags %} class="{{ message.tags }}" style="padding: 10px; border: 1px solid; margin-bottom: 10px; border-radius: 4px; {% if message.level == 25 %} background-color: #dff0d8; border-color: #d6e9c6; color: #3c763d; {% elif message.level >= 40 %} background-color: #f2dede; border-color: #ebccd1; color: #a94442; {% elif message.level >= 30 %} background-color: #fcf8e3; border-color: #faebcc; color: #8a6d3b; {% else %} background-color: #d9edf7; border-color: #bce8f1; color: #31708f;{% endif %}" {% endif %}>
         {{ message }}
       </li>
     {% endfor %}
   </ul>
 {% endif %}
+{# End message display #}
 
 <hr>
-<h3>Default Weather Location</h3>
-{% if profile.default_location_name %}
-    <p>Your current default location is set to: <strong>{{ profile.default_location_name }}</strong></p>
-    <p>(Lat: {{ profile.default_latitude }}, Lon: {{ profile.default_longitude }})</p>
-{% else %}
-    <p>You have not set a default weather location.</p>
+<h3>Subscription Status</h3>
+<p>You are currently on the <strong>{% if is_subscriber %}Premium{% else %}Free{% endif %}</strong> tier.</p>
+<p>(Allows saving up to {{ max_locations }} location{{ max_locations|pluralize }}.)</p>
+{% if not is_subscriber %}
+<p><a href="{% url 'subscriptions:plan_selection' %}">Upgrade to Premium?</a></p>
 {% endif %}
 
-{# Manual Location Form (already added) #}
-<form method="post" action="{% url 'accounts:settings' %}" style="margin-top: 1em;">
-    {% csrf_token %}
-    <label for="manual_location">Set/Update Default Location:</label><br>
-    <input type="text" id="manual_location" name="manual_location" placeholder="Enter City, State or ZIP Code" value="{{ profile.default_location_name|default:'' }}" required size="40">
-    <button type="submit" name="save_manual_location">Save Manual Location</button>
-</form>
+<hr>
+<h3>Saved Weather Locations</h3>
+{% if saved_locations %}
+    <ul style="list-style: none; padding: 0;">
+        {% for loc in saved_locations %}
+            <li style="border: 1px solid #eee; padding: 10px; margin-bottom: 10px; border-radius: 4px;">
+                <strong>{{ loc.location_name }}</strong><br>
+                <small>(Lat: {{ loc.latitude }}, Lon: {{ loc.longitude }})</small>
+                {# Delete Form for this location - FIXED STYLE ATTRIBUTE #}
+                <form method="post" action="{% url 'accounts:settings' %}" style="display: inline; margin-left: 15px;">
+                    {% csrf_token %}
+                    <input type="hidden" name="delete_location" value="{{ loc.pk }}">
+                    <button type="submit" onclick="return confirm('Are you sure you want to delete this location?');" style="color: red; background: none; border: none; padding: 0; cursor: pointer; text-decoration: underline;">Delete</button>
+                </form>
+            </li>
+        {% endfor %}
+    </ul>
+{% else %}
+    <p>You have no saved locations.</p>
+{% endif %}
 
-{# --- Add Browser Geolocation Button and Hidden Form --- #}
-<div style="margin-top: 2em;">
-    <button type="button" id="use-location-btn">Use My Current Location</button>
-    <span id="geo-status" style="margin-left: 10px; font-style: italic;"></span> {# For status messages #}
-</div>
+{# --- Conditionally show Add Forms --- #}
+{% if can_add_location %}
+    <hr>
+    <h4>Add New Location</h4>
+    {# Manual Location Form #}
+    <form method="post" action="{% url 'accounts:settings' %}" style="margin-top: 1em;">
+        {% csrf_token %}
+        <label for="manual_location">Enter Location:</label><br>
+        <input type="text" id="manual_location" name="manual_location" placeholder="City, State or ZIP Code" required size="40">
+        <button type="submit" name="add_manual_location">Add Manual Location</button>
+    </form>
 
-{# Hidden form to submit coordinates from browser geolocation #}
-<form method="post" action="{% url 'accounts:settings' %}" id="geo-form" style="display: none;">
-     {% csrf_token %}
-     <input type="hidden" name="geo_latitude" id="geo_latitude">
-     <input type="hidden" name="geo_longitude" id="geo_longitude">
-     {# Use a button name or hidden input to identify this form on the backend #}
-     <input type="hidden" name="save_geo_location" value="1">
-     {# No visible submit button needed, JS will submit this form #}
-</form>
-{# --- End Browser Geolocation Section --- #}
+    {# Browser Geolocation Button #}
+    <div style="margin-top: 1em;">
+        <button type="button" id="use-location-btn">Use My Current Location</button>
+        <span id="geo-status" style="margin-left: 10px; font-style: italic;"></span> {# Geolocation status messages #}
+    </div>
 
-{# --- Add JavaScript for Geolocation --- #}
+    {# Hidden form for Geolocation #}
+    <form method="post" action="{% url 'accounts:settings' %}" id="geo-form" style="display: none;">
+         {% csrf_token %}
+         <input type="hidden" name="geo_latitude" id="geo_latitude">
+         <input type="hidden" name="geo_longitude" id="geo_longitude">
+         <input type="hidden" name="save_geo_location" value="1">
+    </form>
+{% else %}
+     <p style="margin-top: 1em; font-weight: bold;">You have reached the maximum number of saved locations ({{ max_locations }}) for your plan.</p>
+{% endif %}
+{# --- End Conditional Add Forms --- #}
+
+<hr> {# Optional separator #}
+<h3>Alert Notifications</h3>
+<p>Get notified about weather alerts for your saved locations.</p>
+<button type="button" id="subscribe-push-btn">Subscribe to Alert Notifications</button>
+<span id="push-status" style="margin-left: 10px; font-style: italic;"></span> {# Push status messages #}
+
+{% endblock %} {# End of content block #}
+
+
+{# --- Combined & Corrected JavaScript in extra_js block --- #}
+{% block extra_js %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const geoButton = document.getElementById('use-location-btn');
-    const geoStatus = document.getElementById('geo-status');
-    const geoForm = document.getElementById('geo-form');
-    const latInput = document.getElementById('geo_latitude');
-    const lonInput = document.getElementById('geo_longitude');
-
-    if (geoButton && geoStatus && geoForm && latInput && lonInput) {
-        geoButton.addEventListener('click', function() {
-            geoStatus.textContent = 'Requesting location...'; // Provide feedback
-
-            if (!navigator.geolocation) {
-                geoStatus.textContent = 'Geolocation is not supported by your browser.';
-            } else {
-                navigator.geolocation.getCurrentPosition(successCallback, errorCallback, {
-                    enableHighAccuracy: false, // Can set to true for more accuracy, potentially slower/more power
-                    timeout: 10000, // Wait 10 seconds
-                    maximumAge: 0 // Don't use a cached position
-                });
+        // Helper function to get CSRF token from cookie (Django standard)
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    // Does this cookie string begin with the name we want?
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
             }
-        });
-    }
-
-    function successCallback(position) {
-        const latitude = position.coords.latitude;
-        const longitude = position.coords.longitude;
-
-        geoStatus.textContent = 'Location found! Saving...';
-        latInput.value = latitude;
-        lonInput.value = longitude;
-
-        // Submit the hidden form with the coordinates
-        geoForm.submit();
-    }
-
-    function errorCallback(error) {
-        let message = 'Error retrieving location: ';
-        switch(error.code) {
-            case error.PERMISSION_DENIED:
-                message += "User denied the request for Geolocation.";
-                break;
-            case error.POSITION_UNAVAILABLE:
-                message += "Location information is unavailable.";
-                break;
-            case error.TIMEOUT:
-                message += "The request to get user location timed out.";
-                break;
-            case error.UNKNOWN_ERROR:
-                message += "An unknown error occurred.";
-                break;
+            return cookieValue;
         }
-        geoStatus.textContent = message;
-        console.error("Geolocation Error Code: " + error.code + ", Message: " + error.message);
-    }
-});
-</script>
-{# --- End Geolocation JavaScript --- #}
+        const csrftoken = getCookie('csrftoken');
 
+    // Helper function to convert VAPID key (Needed for Push Notifications)
+    function urlBase64ToUint8Array(base64String) {
+        const padding = '='.repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding)
+            .replace(/\-/g, '+')
+            .replace(/_/g, '/');
+        const rawData = window.atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; ++i) {
+            outputArray[i] = rawData.charCodeAt(i);
+        }
+        return outputArray;
+    }
+
+        {# --- ADD THIS TEST SCRIPT --- #}
+        
+            console.log("!!! TEST LOG: extra_js block is rendering !!!");
+            alert("Test Alert: Settings Page JS Block Rendered!");
+        
+        {# --- END TEST SCRIPT --- #}
+
+    // Single listener for when the whole page is loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log("Settings page JS loaded and DOM ready.");
+
+        // --- Geolocation Elements & Logic ---
+        const geoButton = document.getElementById('use-location-btn');
+        const geoStatus = document.getElementById('geo-status');
+        const geoForm = document.getElementById('geo-form');
+        const latInput = document.getElementById('geo_latitude');
+        const lonInput = document.getElementById('geo_longitude');
+
+        if (geoButton) { // Check if the button exists (it might be hidden by `can_add_location`)
+            console.log("Geo button found, adding listener.");
+            geoButton.addEventListener('click', function() {
+                console.log("Geo button clicked!");
+                 if (!geoStatus || !geoForm || !latInput || !lonInput) {
+                     console.error("Geo form elements missing inside click handler!");
+                     if(geoStatus) geoStatus.textContent = 'Error: Internal form elements missing.';
+                     return;
+                }
+                geoStatus.textContent = 'Requesting location...';
+                console.log("Requesting geolocation...");
+                if (!navigator.geolocation) {
+                    geoStatus.textContent = 'Geolocation is not supported.';
+                    console.error("Geolocation not supported.");
+                } else {
+                    navigator.geolocation.getCurrentPosition(geoSuccessCallback, geoErrorCallback, {
+                        enableHighAccuracy: false, timeout: 10000, maximumAge: 0
+                    });
+                }
+            });
+        } else {
+             console.warn("Geo button (#use-location-btn) not found or not visible on this page load.");
+        }
+
+        function geoSuccessCallback(position) {
+            const latitude = position.coords.latitude;
+            const longitude = position.coords.longitude;
+            console.log("Geolocation success:", latitude, longitude);
+            if (!geoStatus || !geoForm || !latInput || !lonInput) {
+                console.error("Geo form elements missing before submit!");
+                if(geoStatus) geoStatus.textContent = 'Error: Internal form elements missing before submit.';
+                return;
+            }
+            geoStatus.textContent = 'Location found! Saving...';
+            latInput.value = latitude;
+            lonInput.value = longitude;
+            console.log("Submitting hidden geo form...");
+            geoForm.submit();
+        }
+
+        function geoErrorCallback(error) {
+             let message = 'Error retrieving location: ';
+             switch(error.code) {
+                case error.PERMISSION_DENIED: message += "Permission denied."; break;
+                case error.POSITION_UNAVAILABLE: message += "Location unavailable."; break;
+                case error.TIMEOUT: message += "Request timed out."; break;
+                case error.UNKNOWN_ERROR: message += "Unknown error."; break;
+             }
+             if(geoStatus) { geoStatus.textContent = message; }
+             console.error("Geolocation Error Code: " + error.code + ", Message: " + error.message);
+        }
+
+        // --- Push Notification Elements & Logic ---
+        const subscribeButton = document.getElementById('subscribe-push-btn');
+        const pushStatus = document.getElementById('push-status');
+        const vapidPublicKey = '{{ vapid_public_key|default:"" }}'; // Get key from Django
+
+        if (subscribeButton && pushStatus) { // Check if button exists
+             if (!vapidPublicKey) {
+                console.error('VAPID Public Key missing.');
+                pushStatus.textContent = 'Error: Push config missing.';
+                subscribeButton.disabled = true;
+             } else if ('serviceWorker' in navigator && 'PushManager' in window && Notification) {
+                console.log('Push Notifications potentially supported.');
+                subscribeButton.addEventListener('click', function() {
+                    pushStatus.textContent = 'Requesting permission...';
+                    Notification.requestPermission().then((permission) => {
+                        if (permission === 'granted') {
+                            console.log('Push permission granted.');
+                            pushStatus.textContent = 'Registering service worker...';
+                            navigator.serviceWorker.register('/sw.js')
+                                .then(function(registration) {
+                                    console.log('Service Worker registered:', registration);
+                                    pushStatus.textContent = 'Subscribing...';
+                                    const subscribeOptions = {
+                                        userVisibleOnly: true,
+                                        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+                                    };
+                                    return registration.pushManager.subscribe(subscribeOptions);
+                                })
+                                .then(function(subscription) {
+                                    console.log('Push Subscription successful:', subscription);
+                                    console.log("Subscription JSON:", JSON.stringify(subscription));
+                                    pushStatus.textContent = 'Subscription successful! (Check console)';
+                                    // TODO: Send subscription JSON to backend
+                            fetch("{% url 'subscriptions:save_push_subscription' %}", { // Use Django URL tag
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-CSRFToken': csrftoken // Include CSRF token
+                                },
+                                // Use subscription.toJSON() to get a plain object
+                                body: JSON.stringify(subscription.toJSON())
+                            })
+                            .then(response => {
+                                if (!response.ok) {
+                                    // Try to get error message from backend response if possible
+                                    return response.json().then(data => {
+                                       throw new Error(data.message || `Server error: ${response.status}`);
+                                    });
+                                }
+                                return response.json(); // Expecting {'status': 'success'}
+                            })
+                            .then(data => {
+                                if (data.status === 'success') {
+                                    console.log('Subscription saved successfully on server.');
+                                    pushStatus.textContent = 'Subscription saved!';
+                                    // Maybe disable button now?
+                                    // subscribeButton.disabled = true;
+                                } else {
+                                    // This case should ideally be caught by !response.ok check above
+                                    console.error('Server responded with error:', data.message);
+                                    pushStatus.textContent = 'Save failed: ' + (data.message || 'Unknown server error');
+                                }
+                            })
+                            .catch(error => {
+                                console.error('Error sending subscription to server:', error);
+                                pushStatus.textContent = 'Save failed: ' + error.message;
+                            });
+                            // --- END FETCH CALL ---
+
+                                })
+                                .catch(function(err) {
+                                    console.error('SW registration or Push subscription failed:', err);
+                                    pushStatus.textContent = 'Subscription failed: ' + err.message;
+                                });
+                        } else {
+                            console.warn('Push permission denied.');
+                            pushStatus.textContent = 'Permission denied.';
+                        }
+                    });
+                }); // End click listener
+             } else {
+                console.warn('Push notifications or Service Workers not supported.');
+                pushStatus.textContent = 'Push not supported.';
+                subscribeButton.disabled = true;
+             }
+        } else {
+             console.warn("Push subscribe button or status element not found.");
+        }
+
+    }); // End DOMContentLoaded listener
+</script>
 {% endblock %}
