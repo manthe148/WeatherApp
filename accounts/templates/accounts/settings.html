@@ -80,8 +80,24 @@
 <hr> {# Optional separator #}
 <h3>Alert Notifications</h3>
 <p>Get notified about weather alerts for your saved locations.</p>
-<button type="button" id="subscribe-push-btn">Subscribe to Alert Notifications</button>
-<span id="push-status" style="margin-left: 10px; font-style: italic;"></span> {# Push status messages #}
+{# --- Add iOS Instructions Div (Initially Hidden) --- #}
+<div id="ios-instructions" class="alert alert-info" style="display: none;" role="alert">
+  <h4 class="alert-heading">Enable Notifications on iPhone/iPad</h4>
+  <p>To receive notifications on this device, you first need to add this website to your Home Screen:</p>
+  <ol>
+    <li>Tap the 'Share' button <img src="{% static 'images/icons/Icon_512.jpg' %}" alt="iOS Share Icon" style="height:1.2em; vertical-align: middle;"> in Safari (usually at the bottom or top).</li>
+    <li>Scroll down and tap 'Add to Home Screen'.</li>
+    <li>Tap 'Add'.</li>
+    <li>Close Safari and open the newly added "Weather App" icon from your Home Screen.</li>
+    <li>Navigate back to this Settings page *within the Home Screen app* and then tap the 'Subscribe' button below.</li>
+  </ol>
+</div>
+{# --- End iOS Instructions Div --- #}
+
+
+{# Add 'disabled' attribute initially #}
+<button type="button" id="subscribe-push-btn" class="btn btn-info" disabled>Subscribe to Alert Notifications</button>
+<span id="push-status" style="margin-left: 10px; font-style: italic;"></span>
 
 {% endblock %} {# End of content block #}
 
@@ -107,103 +123,92 @@
         }
         const csrftoken = getCookie('csrftoken');
 
-    // Helper function to convert VAPID key (Needed for Push Notifications)
+    // Helper function (keep as before)
     function urlBase64ToUint8Array(base64String) {
-        const padding = '='.repeat((4 - base64String.length % 4) % 4);
-        const base64 = (base64String + padding)
-            .replace(/\-/g, '+')
-            .replace(/_/g, '/');
-        const rawData = window.atob(base64);
-        const outputArray = new Uint8Array(rawData.length);
-        for (let i = 0; i < rawData.length; ++i) {
-            outputArray[i] = rawData.charCodeAt(i);
-        }
-        return outputArray;
+        // ... (same function content) ...
+         const padding = '='.repeat((4 - base64String.length % 4) % 4);
+         const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+         const rawData = window.atob(base64);
+         const outputArray = new Uint8Array(rawData.length);
+         for (let i = 0; i < rawData.length; ++i) { outputArray[i] = rawData.charCodeAt(i); }
+         return outputArray;
     }
 
-        {# --- ADD THIS TEST SCRIPT --- #}
-        
-            console.log("!!! TEST LOG: extra_js block is rendering !!!");
-            alert("Test Alert: Settings Page JS Block Rendered!");
-        
-        {# --- END TEST SCRIPT --- #}
+    // Function to check for iOS
+    function isIOS() {
+        return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    }
 
-    // Single listener for when the whole page is loaded
+    // Function to check if running as PWA/Standalone (Added to Home Screen)
+    function isStandalone() {
+        return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+    }
+
+
     document.addEventListener('DOMContentLoaded', function() {
         console.log("Settings page JS loaded and DOM ready.");
 
-        // --- Geolocation Elements & Logic ---
+        // --- Geolocation Logic (Keep as before) ---
         const geoButton = document.getElementById('use-location-btn');
         const geoStatus = document.getElementById('geo-status');
         const geoForm = document.getElementById('geo-form');
         const latInput = document.getElementById('geo_latitude');
         const lonInput = document.getElementById('geo_longitude');
 
-        if (geoButton) { // Check if the button exists (it might be hidden by `can_add_location`)
+        if (geoButton) {
             console.log("Geo button found, adding listener.");
-            geoButton.addEventListener('click', function() {
+            geoButton.addEventListener('click', function() { /* ... existing geolocation click logic ... */
                 console.log("Geo button clicked!");
-                 if (!geoStatus || !geoForm || !latInput || !lonInput) {
-                     console.error("Geo form elements missing inside click handler!");
-                     if(geoStatus) geoStatus.textContent = 'Error: Internal form elements missing.';
-                     return;
-                }
-                geoStatus.textContent = 'Requesting location...';
-                console.log("Requesting geolocation...");
-                if (!navigator.geolocation) {
-                    geoStatus.textContent = 'Geolocation is not supported.';
-                    console.error("Geolocation not supported.");
-                } else {
-                    navigator.geolocation.getCurrentPosition(geoSuccessCallback, geoErrorCallback, {
-                        enableHighAccuracy: false, timeout: 10000, maximumAge: 0
-                    });
-                }
+                 if (!geoStatus || !geoForm || !latInput || !lonInput) { console.error("Geo form elements missing..."); if(geoStatus) geoStatus.textContent='Error: Internal form elements missing.'; return; }
+                 geoStatus.textContent = 'Requesting location...'; console.log("Requesting geolocation...");
+                 if (!navigator.geolocation) { geoStatus.textContent = 'Geolocation not supported.'; console.error("Geolocation not supported."); }
+                 else { navigator.geolocation.getCurrentPosition(geoSuccessCallback, geoErrorCallback, {enableHighAccuracy: false, timeout: 10000, maximumAge: 0}); }
             });
-        } else {
-             console.warn("Geo button (#use-location-btn) not found or not visible on this page load.");
+        } else { console.warn("Geo button (#use-location-btn) not found or not visible."); }
+        function geoSuccessCallback(position) { /* ... existing success logic ... */
+            const latitude = position.coords.latitude; const longitude = position.coords.longitude; console.log("Geolocation success:", latitude, longitude);
+            if (!geoStatus || !geoForm || !latInput || !lonInput) { console.error("Geo form elements missing before submit!"); if(geoStatus) geoStatus.textContent = 'Error: Internal form elements missing before submit.'; return; }
+            geoStatus.textContent = 'Location found! Saving...'; latInput.value = latitude; lonInput.value = longitude; console.log("Submitting hidden geo form..."); geoForm.submit();
         }
+        function geoErrorCallback(error) { /* ... existing error logic ... */
+            let message = 'Error retrieving location: '; switch(error.code) { case error.PERMISSION_DENIED: message += "Permission denied."; break; case error.POSITION_UNAVAILABLE: message += "Location unavailable."; break; case error.TIMEOUT: message += "Request timed out."; break; case error.UNKNOWN_ERROR: message += "Unknown error."; break; }
+            if(geoStatus) { geoStatus.textContent = message; } console.error("Geolocation Error Code: " + error.code + ", Message: " + error.message);
+         }
+        // --- End Geolocation Logic ---
 
-        function geoSuccessCallback(position) {
-            const latitude = position.coords.latitude;
-            const longitude = position.coords.longitude;
-            console.log("Geolocation success:", latitude, longitude);
-            if (!geoStatus || !geoForm || !latInput || !lonInput) {
-                console.error("Geo form elements missing before submit!");
-                if(geoStatus) geoStatus.textContent = 'Error: Internal form elements missing before submit.';
-                return;
-            }
-            geoStatus.textContent = 'Location found! Saving...';
-            latInput.value = latitude;
-            lonInput.value = longitude;
-            console.log("Submitting hidden geo form...");
-            geoForm.submit();
-        }
 
-        function geoErrorCallback(error) {
-             let message = 'Error retrieving location: ';
-             switch(error.code) {
-                case error.PERMISSION_DENIED: message += "Permission denied."; break;
-                case error.POSITION_UNAVAILABLE: message += "Location unavailable."; break;
-                case error.TIMEOUT: message += "Request timed out."; break;
-                case error.UNKNOWN_ERROR: message += "Unknown error."; break;
-             }
-             if(geoStatus) { geoStatus.textContent = message; }
-             console.error("Geolocation Error Code: " + error.code + ", Message: " + error.message);
-        }
-
-        // --- Push Notification Elements & Logic ---
+        // --- Push Notification Logic ---
         const subscribeButton = document.getElementById('subscribe-push-btn');
         const pushStatus = document.getElementById('push-status');
-        const vapidPublicKey = '{{ vapid_public_key|default:"" }}'; // Get key from Django
+        const iosInstructions = document.getElementById('ios-instructions'); // Get instruction div
+        const vapidPublicKey = '{{ vapid_public_key|default:"" }}';
 
-        if (subscribeButton && pushStatus) { // Check if button exists
+        if (subscribeButton && pushStatus && iosInstructions) { // Check elements exist
              if (!vapidPublicKey) {
                 console.error('VAPID Public Key missing.');
                 pushStatus.textContent = 'Error: Push config missing.';
                 subscribeButton.disabled = true;
+                return; // Stop if no VAPID key
+             }
+
+             const onIOS = isIOS();
+             const runningStandalone = isStandalone();
+             console.log(`iOS: ${onIOS}, Standalone: ${runningStandalone}`);
+
+             if (onIOS && !runningStandalone) {
+                // On iOS but NOT running from Home Screen
+                console.log("iOS detected, not standalone. Showing instructions.");
+                iosInstructions.style.display = 'block'; // Show instructions
+                pushStatus.textContent = 'Add to Home Screen first.';
+                subscribeButton.disabled = true; // Keep button disabled
              } else if ('serviceWorker' in navigator && 'PushManager' in window && Notification) {
-                console.log('Push Notifications potentially supported.');
+                // Either NOT iOS, OR IS iOS and running standalone
+                console.log('Push Notifications potentially supported and allowed in this context.');
+                iosInstructions.style.display = 'none'; // Hide instructions
+                subscribeButton.disabled = false; // Enable the button
+
                 subscribeButton.addEventListener('click', function() {
+                    // --- Existing subscription logic goes here ---
                     pushStatus.textContent = 'Requesting permission...';
                     Notification.requestPermission().then((permission) => {
                         if (permission === 'granted') {
@@ -220,65 +225,48 @@
                                     return registration.pushManager.subscribe(subscribeOptions);
                                 })
                                 .then(function(subscription) {
-                                    console.log('Push Subscription successful:', subscription);
+                                    // ... (Log subscription, Send to server logic) ...
                                     console.log("Subscription JSON:", JSON.stringify(subscription));
-                                    pushStatus.textContent = 'Subscription successful! (Check console)';
-                                    // TODO: Send subscription JSON to backend
-                            fetch("{% url 'subscriptions:save_push_subscription' %}", { // Use Django URL tag
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'X-CSRFToken': csrftoken // Include CSRF token
-                                },
-                                // Use subscription.toJSON() to get a plain object
-                                body: JSON.stringify(subscription.toJSON())
-                            })
-                            .then(response => {
-                                if (!response.ok) {
-                                    // Try to get error message from backend response if possible
-                                    return response.json().then(data => {
-                                       throw new Error(data.message || `Server error: ${response.status}`);
+                                    pushStatus.textContent = 'Subscribing... Sending to server...';
+                                    // --- Fetch Call to Save Subscription ---
+                                    fetch("{% url 'subscriptions:save_push_subscription' %}", {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                                        body: JSON.stringify(subscription.toJSON())
+                                    })
+                                    .then(response => { /* ... handle response ... */
+                                        if (!response.ok) { return response.json().then(data => { throw new Error(data.message || `Server error: ${response.status}`); }); }
+                                        return response.json();
+                                    })
+                                    .then(data => { /* ... update pushStatus ... */
+                                        if (data.status === 'success') { console.log('Sub saved.'); pushStatus.textContent = 'Subscription active!'; }
+                                        else { console.error('Server error:', data.message); pushStatus.textContent = 'Save failed: ' + (data.message || 'Unknown server error'); }
+                                    })
+                                    .catch(error => { /* ... update pushStatus on fetch error ... */
+                                         console.error('Error sending sub:', error); pushStatus.textContent = 'Save failed: ' + error.message;
                                     });
-                                }
-                                return response.json(); // Expecting {'status': 'success'}
-                            })
-                            .then(data => {
-                                if (data.status === 'success') {
-                                    console.log('Subscription saved successfully on server.');
-                                    pushStatus.textContent = 'Subscription saved!';
-                                    // Maybe disable button now?
-                                    // subscribeButton.disabled = true;
-                                } else {
-                                    // This case should ideally be caught by !response.ok check above
-                                    console.error('Server responded with error:', data.message);
-                                    pushStatus.textContent = 'Save failed: ' + (data.message || 'Unknown server error');
-                                }
-                            })
-                            .catch(error => {
-                                console.error('Error sending subscription to server:', error);
-                                pushStatus.textContent = 'Save failed: ' + error.message;
-                            });
-                            // --- END FETCH CALL ---
-
+                                    // --- End Fetch Call ---
                                 })
-                                .catch(function(err) {
-                                    console.error('SW registration or Push subscription failed:', err);
-                                    pushStatus.textContent = 'Subscription failed: ' + err.message;
+                                .catch(function(err) { /* ... handle registration/subscribe error ... */
+                                     console.error('SW registration or Push subscription failed:', err); pushStatus.textContent = 'Subscription failed: ' + err.message;
                                 });
-                        } else {
-                            console.warn('Push permission denied.');
-                            pushStatus.textContent = 'Permission denied.';
+                        } else { /* ... handle permission denied ... */
+                            console.warn('Push permission denied.'); pushStatus.textContent = 'Permission denied.';
                         }
-                    });
+                    }); // End Notification.requestPermission().then
                 }); // End click listener
+                // --- End Existing subscription logic ---
+
              } else {
-                console.warn('Push notifications or Service Workers not supported.');
-                pushStatus.textContent = 'Push not supported.';
-                subscribeButton.disabled = true;
+                 // Push not supported by browser (outside iOS check)
+                 console.warn('Push notifications or Service Workers not supported.');
+                 pushStatus.textContent = 'Push not supported by this browser.';
+                 subscribeButton.disabled = true;
              }
         } else {
-             console.warn("Push subscribe button or status element not found.");
+             console.error("Push Notification related elements not found.");
         }
+        // --- End Push Notification Logic ---
 
     }); // End DOMContentLoaded listener
 </script>

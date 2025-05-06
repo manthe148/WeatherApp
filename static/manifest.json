@@ -1,0 +1,21 @@
+{
+  "name": "Unfortunate Weather App",
+  "short_name": "UnfortunateWeatherApp",
+  "description": "Weather alerts and radar",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#343a40",
+  "icons": [
+    {
+      "src": "/static/images/icons/Icon_192.jpg",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/images/icons/Icon_512.jpg",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

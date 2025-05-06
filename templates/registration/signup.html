@@ -6,8 +6,10 @@
 <h2>Sign Up</h2>
 <form method="post">
     {% csrf_token %}
+<div class="mb-3">
     {{ form.as_p }} {# Renders Username, Password, Password confirmation fields #}
-    <button type="submit">Sign Up</button>
+</div>    
+    <button class='btn btn-primary' type="submit">Sign Up</button>
 </form>
 <p style="margin-top: 1em;">Already have an account? <a href="{% url 'accounts:login' %}">Log In</a></p>
 {% endblock %}

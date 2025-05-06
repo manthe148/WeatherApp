@@ -50,11 +50,11 @@ self.addEventListener('notificationclick', function(event) {
 self.addEventListener('install', event => {
   console.log('[Service Worker] Install event');
   // Optional: allows the new service worker to activate immediately
-  // self.skipWaiting();
+  event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener('activate', event => {
     console.log('[Service Worker] Activate event');
     // Optional: ensures the new service worker takes control immediately
-    // event.waitUntil(clients.claim());
+    event.waitUntil(clients.claim());
 });
