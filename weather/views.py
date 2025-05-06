@@ -62,14 +62,29 @@ def get_weather_alerts(request):
     elif request.user.is_authenticated:
         # --- No explicit query, check for logged-in user's saved default ---
         try:
-            profile = request.user.profile # Access related profile
-            if profile.default_latitude is not None and profile.default_longitude is not None:
-                latitude = profile.default_latitude # Use profile coords
-                longitude = profile.default_longitude
-                # Use profile name, fallback to site default name if profile name is somehow empty
-                location_name = profile.default_location_name or site_default_name
-                print(f"Using saved location for user {request.user.username}: {location_name}") # Log
-            # else: user has no saved default, so we just keep the site default initialized earlier
+            profile = request.user.profile
+            # --- Modify this query ---
+            default_location = profile.saved_locations.filter(is_default=True).first()
+            # --- End modification ---
+
+            if default_location:
+                latitude = default_location.latitude
+                longitude = default_location.longitude
+                location_name = default_location.location_name
+                print(f"Using DEFAULT saved location for user {request.user.username}: {location_name}")
+            else:
+                 # If no default is set, you could optionally grab the first one
+                 # first_loc = profile.saved_locations.first()
+                 # if first_loc:
+                 #    latitude = first_loc.latitude
+                 #    longitude = first_loc.longitude
+                 #    location_name = first_loc.location_name
+                 #    print(f"No default set, using FIRST saved location for user {request.user.username}: {location_name}")
+                 # else: # No saved locations at all
+                 #    print(f"User {request.user.username} has no saved locations, using site default.")
+                 # Or simply fall back to site default if no explicit default is marked:
+                 print(f"User {request.user.username} has no default location set, using site default.")
+                 # Keep latitude/longitude/location_name as the initial site defaults
         except AttributeError:
             # This handles the case where request.user might not have a 'profile'
             # attribute, though signals should prevent this for logged-in users.
