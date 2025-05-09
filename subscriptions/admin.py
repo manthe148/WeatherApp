@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import Plan, Subscription
+from .models import Plan, Subscription, NotifiedAlert
+
 
 @admin.register(Plan)
 class PlanAdmin(admin.ModelAdmin):
@@ -11,4 +12,9 @@ class SubscriptionAdmin(admin.ModelAdmin):
     list_filter = ('status', 'plan')
     search_fields = ('user__username', 'stripe_customer_id', 'stripe_subscription_id')
 
-# Register your models here.
+@admin.register(NotifiedAlert)
+class NotifiedAlertAdmin(admin.ModelAdmin):
+    list_display = ('user', 'nws_alert_id', 'saved_location', 'sent_at')
+    list_filter = ('user',)
+    search_fields = ('user__username', 'nws_alert_id')
+    readonly_fields = ('sent_at',)

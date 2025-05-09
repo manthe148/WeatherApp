@@ -1,5 +1,7 @@
 from django.db import models
 from django.conf import settings
+from accounts.models import SavedLocation # Assuming SavedLocation is in accounts.models
+
 
 class Plan(models.Model):
     name = models.CharField(max_length=100, unique=True) # e.g., "Free", "Premium Monthly"
@@ -45,3 +47,20 @@ class Subscription(models.Model):
     def is_active(self):
         # Helper property to check if subscription is considered active for features
         return self.status in ['active', 'trialing']
+
+
+class NotifiedAlert(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    # Store the unique ID provided by the NWS for each alert
+    nws_alert_id = models.CharField(max_length=255, db_index=True)
+    # Optionally link to the specific saved location this alert was for
+    saved_location = models.ForeignKey(SavedLocation, on_delete=models.CASCADE, null=True, blank=True)
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        # Ensure we don't notify the same user about the same NWS alert ID multiple times
+        unique_together = [['user', 'nws_alert_id']]
+        ordering = ['-sent_at']
+
+    def __str__(self):
+        return f"Alert {self.nws_alert_id} sent to {self.user.username} at {self.sent_at}"

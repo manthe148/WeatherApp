@@ -216,67 +216,85 @@ def stripe_webhook_view(request):
         # or add a final broad except Exception here if necessary for production.
 
     # --- Handle other event types ---
+    # --- Handle invoice.paid (Subscription Renewal/Payment Success) ---
     elif event.type == 'invoice.paid':
-        # Continued payment success / Subscription renewed
         invoice = event.data.object
         stripe_subscription_id = invoice.get('subscription')
-        print(f"Processing invoice.paid for subscription {stripe_subscription_id}")
-        try:
-            # Retrieve the full Subscription object from Stripe to get updated period end
-            stripe_sub = stripe.Subscription.retrieve(stripe_subscription_id)
-            # Find the local subscription record
-            subscription = Subscription.objects.get(stripe_subscription_id=stripe_subscription_id)
-            # Update status and period end
-            subscription.status = stripe_sub.status # Should be 'active'
-            if stripe_sub.current_period_end:
-                subscription.current_period_end = datetime.fromtimestamp(
-                    stripe_sub.current_period_end, tz=timezone.utc
-                )
-            subscription.save()
-            print(f"Updated subscription {stripe_subscription_id} on invoice.paid.")
-        except Subscription.DoesNotExist:
-            print(f"!!! Error: Subscription {stripe_subscription_id} not found in DB for invoice.paid.")
-        except stripe.error.StripeError as e:
-            print(f"!!! Stripe Error handling {event.type} for {stripe_subscription_id}: {e}")
-        except Exception as e:
-            print(f"!!! Error handling {event.type} for {stripe_subscription_id}: {e}")
-            traceback.print_exc()
+        print(f"Processing {event.type} for subscription {stripe_subscription_id}")
 
+        if invoice.get('billing_reason') == 'subscription_cycle' and invoice.get('status') == 'paid' and stripe_subscription_id:
+            try:
+                # Retrieve the latest subscription details from Stripe
+                stripe_sub = stripe.Subscription.retrieve(stripe_subscription_id)
+                # Find the corresponding subscription in your database
+                subscription = Subscription.objects.get(stripe_subscription_id=stripe_subscription_id)
+
+                # Update status and period end based on the latest Stripe data
+                subscription.status = stripe_sub.status # Should be 'active'
+                new_period_end_dt = None
+                if stripe_sub.current_period_end:
+                    try:
+                        new_period_end_dt = datetime.fromtimestamp(stripe_sub.current_period_end, tz=timezone.utc)
+                    except Exception as e_conv:
+                        print(f"!!! ERROR converting timestamp {stripe_sub.current_period_end} for invoice.paid: {e_conv}")
+
+                subscription.current_period_end = new_period_end_dt
+                subscription.save(update_fields=['status', 'current_period_end']) # Save only changed fields
+                print(f"Updated subscription {stripe_subscription_id} on {event.type}. Status: {subscription.status}, New Period End: {subscription.current_period_end}")
+
+            except Subscription.DoesNotExist:
+                print(f"!!! Error: Subscription {stripe_subscription_id} not found in DB for {event.type}.")
+            except stripe.error.StripeError as e:
+                print(f"!!! Stripe Error handling {event.type} for {stripe_subscription_id}: {e}")
+                # Don't return 500 immediately, Stripe might retry. Log carefully.
+            except Exception as e:
+                print(f"!!! Error handling {event.type} for {stripe_subscription_id}: {e}")
+                traceback.print_exc()
+        else:
+            print(f"Ignoring {event.type} event (Reason: {invoice.get('billing_reason')}, Status: {invoice.get('status')})")
+
+
+    # --- Handle subscription updates/cancellations ---
     elif event.type in ['customer.subscription.updated', 'customer.subscription.deleted']:
-        # Handles cancellations, plan changes, etc.
-        stripe_sub = event.data.object # The subscription object is the event data
+        stripe_sub = event.data.object # The event data *is* the subscription object
         stripe_subscription_id = stripe_sub.id
         print(f"Processing {event.type} for subscription {stripe_subscription_id}")
-        try:
-            # Find the local subscription record
-            subscription = Subscription.objects.get(stripe_subscription_id=stripe_subscription_id)
-            # Update status and period end from the event data
-            subscription.status = stripe_sub.status # e.g., 'canceled', 'active' (if plan changed)
-            if stripe_sub.current_period_end:
-                 subscription.current_period_end = datetime.fromtimestamp(
-                     stripe_sub.current_period_end, tz=timezone.utc
-                 )
-            elif stripe_sub.status == 'canceled':
-                 # If canceled, maybe use cancel_at_period_end timestamp if available?
-                 # Or just set period end based on cancellation time? Depends on desired logic.
-                 # For simplicity, we might just set status to canceled.
-                 if stripe_sub.canceled_at:
-                     subscription.current_period_end = datetime.fromtimestamp(
-                         stripe_sub.canceled_at, tz=timezone.utc
-                     )
 
-            # If plan changed, find new Plan object and update FK (more complex)
-            # current_plan_price_id = stripe_sub.plan.id
-            # if subscription.plan.stripe_price_id != current_plan_price_id:
-            #    try:
-            #        new_plan = Plan.objects.get(stripe_price_id=current_plan_price_id)
-            #        subscription.plan = new_plan
-            #        print(f"Updated plan for subscription {stripe_subscription_id}")
-            #    except Plan.DoesNotExist:
-            #        print(f"!!! Error: New plan {current_plan_price_id} not found.")
+        try:
+            subscription = Subscription.objects.get(stripe_subscription_id=stripe_subscription_id)
+
+            # Update status from the received object
+            subscription.status = stripe_sub.status # e.g., 'active', 'canceled', 'past_due'
+
+            # Update period end (might be None if canceled immediately)
+            new_period_end_dt = None
+            if stripe_sub.current_period_end:
+                try:
+                    new_period_end_dt = datetime.fromtimestamp(stripe_sub.current_period_end, tz=timezone.utc)
+                except Exception as e_conv:
+                     print(f"!!! ERROR converting timestamp {stripe_sub.current_period_end} for {event.type}: {e_conv}")
+            elif stripe_sub.status == 'canceled' and stripe_sub.canceled_at:
+                # If canceled, maybe use the cancellation time as the effective end
+                try:
+                     new_period_end_dt = datetime.fromtimestamp(stripe_sub.canceled_at, tz=timezone.utc)
+                except Exception as e_conv:
+                     print(f"!!! ERROR converting canceled_at timestamp {stripe_sub.canceled_at} for {event.type}: {e_conv}")
+
+            subscription.current_period_end = new_period_end_dt
+
+            # Check if plan changed (for 'updated' events)
+            current_plan_price_id = stripe_sub.plan.id
+            if subscription.plan is None or subscription.plan.stripe_price_id != current_plan_price_id:
+                try:
+                    new_plan = Plan.objects.get(stripe_price_id=current_plan_price_id)
+                    subscription.plan = new_plan
+                    print(f"Updated plan for subscription {stripe_subscription_id} to {new_plan.name}")
+                except Plan.DoesNotExist:
+                    print(f"!!! Error: New plan {current_plan_price_id} not found in DB.")
+                    subscription.plan = None # Or handle differently
 
             subscription.save()
-            print(f"Updated subscription {stripe_subscription_id} on {event.type}.")
+            print(f"Updated subscription {stripe_subscription_id} on {event.type}. Status: {subscription.status}")
 
         except Subscription.DoesNotExist:
             print(f"!!! Error: Subscription {stripe_subscription_id} not found in DB for {event.type}.")
@@ -284,28 +302,35 @@ def stripe_webhook_view(request):
             print(f"!!! Error handling {event.type} for {stripe_subscription_id}: {e}")
             traceback.print_exc()
 
+    # --- Handle failed payments ---
     elif event.type == 'invoice.payment_failed':
-        # Handle failed payments (update status)
         invoice = event.data.object
         stripe_subscription_id = invoice.get('subscription')
-        print(f"Processing invoice.payment_failed for subscription {stripe_subscription_id}")
-        try:
-            subscription = Subscription.objects.get(stripe_subscription_id=stripe_subscription_id)
-            subscription.status = 'past_due' # Or 'unpaid' depending on Stripe settings/logic
-            subscription.save()
-            print(f"Set status to '{subscription.status}' for subscription {stripe_subscription_id} due to payment failure.")
-        except Subscription.DoesNotExist:
-             print(f"!!! Error: Subscription {stripe_subscription_id} not found in DB for {event.type}.")
-        except Exception as e:
-             print(f"!!! Error handling {event.type} for {stripe_subscription_id}: {e}")
-             traceback.print_exc()
+        print(f"Processing {event.type} for subscription {stripe_subscription_id}")
+
+        if stripe_subscription_id:
+            try:
+                # Find the subscription and update status based on Stripe's state after failure
+                stripe_sub = stripe.Subscription.retrieve(stripe_subscription_id)
+                subscription = Subscription.objects.get(stripe_subscription_id=stripe_subscription_id)
+                subscription.status = stripe_sub.status # Could be 'past_due', 'unpaid', or even 'canceled'
+                subscription.save(update_fields=['status'])
+                print(f"Updated subscription {stripe_subscription_id} status to '{subscription.status}' on {event.type}.")
+            except Subscription.DoesNotExist:
+                 print(f"!!! Error: Subscription {stripe_subscription_id} not found in DB for {event.type}.")
+            except stripe.error.StripeError as e:
+                 print(f"!!! Stripe Error handling {event.type} for {stripe_subscription_id}: {e}")
+            except Exception as e:
+                 print(f"!!! Error handling {event.type} for {stripe_subscription_id}: {e}")
+                 traceback.print_exc()
+        else:
+            print(f"Ignoring {event.type} as no subscription ID was found on the invoice.")
 
     else:
         print(f"Unhandled event type {event.type}")
 
     # Acknowledge receipt to Stripe
     return HttpResponse(status=200)
-
 
 @login_required
 @require_POST # Expecting POST request with JSON data

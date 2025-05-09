@@ -14,7 +14,7 @@
 {% endif %}
 
 {# Add the location input form #}
-	<form method="GET" action="{% url 'weather:alert_list' %}" style="margin-bottom: 20px;">
+	<form method="GET" action="{% url 'weather:weather_page' %}" style="margin-bottom: 20px;">
     	    <label for="location">Enter Location (e.g., City, State or ZIP):</label>
     	    <input type="text" id="location" name="location_query" value="{{ request.GET.location_query|default:'' }}" required>
             <button type="submit">Get Alerts</button>

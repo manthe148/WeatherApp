@@ -23,6 +23,30 @@ load_dotenv(os.path.join(BASE_DIR, '.env')) # Explicitly point to .env file
 # ... other settings like SECRET_KEY, DEBUG, ALLOWED_HOSTS ...
 VAPID_PUBLIC_KEY_FOR_TEMPLATE = os.getenv('VAPID_PUBLIC_KEY')
 
+# --- DEBUG PRINT for VAPID Keys from .env ---
+_vapid_admin_email_from_env = os.getenv('VAPID_ADMIN_EMAIL')
+_vapid_private_key_from_env = os.getenv('VAPID_PRIVATE_KEY')
+_vapid_public_key_from_env = os.getenv('VAPID_PUBLIC_KEY') # For VAPID_PUBLIC_KEY_FOR_TEMPLATE
+
+
+PUSH_NOTIFICATIONS_SETTINGS = {
+    # This "WP_CLAIMS" key is what django-push-notifications typically looks for.
+    "WP_CLAIMS": {
+        "sub": f"mailto:{os.getenv('VAPID_ADMIN_EMAIL')}"
+    },
+    # The VAPID_PRIVATE_KEY should be at this level or the library might
+    # also look for it globally as settings.VAPID_PRIVATE_KEY.
+    # For django-push-notifications, it often expects it here:
+    "VAPID_PRIVATE_KEY": os.getenv("VAPID_PRIVATE_KEY"),
+
+    # Note: The VAPID_PUBLIC_KEY is not directly used by the backend for SENDING pushes.
+    # It's used by the frontend to subscribe. pywebpush (used by django-push-notifications)
+    # primarily needs the private key and the 'sub' claim for sending.
+}
+
+# ... other settings like SECRET_KEY, DEBUG, ALLOWED_HOSTS ...
+VAPID_PUBLIC_KEY_FOR_TEMPLATE = os.getenv('VAPID_PUBLIC_KEY')
+
 
 # --- Stripe API Keys ---
 STRIPE_PUBLISHABLE_KEY = os.getenv('STRIPE_PUBLISHABLE_KEY')
@@ -67,6 +91,7 @@ INSTALLED_APPS = [
     'django_extensions',
     'subscriptions',
     'push_notifications',
+    'django_q',
 ]
 
 MIDDLEWARE = [
@@ -129,12 +154,28 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
+# Django Q2 Configuration (to use Django ORM as the broker)
+Q_CLUSTER = {
+    'name': 'DjangORM',      # A name for this cluster configuration
+    'workers': 2,           # Number of worker processes to run (2-4 is a good start)
+    'timeout': 90,          # Task timeout in seconds before it's considered failed
+    'retry': 120,           # How long to wait to retry a failed task (seconds). Must be > timeout.
+    'queue_limit': 50,      # Max number of tasks to fetch from DB at once per worker
+    'bulk': 10,             # How many tasks a worker will try to process in a batch
+    'orm': 'default',       # Crucial: Tells Django Q to use the default Django database
+    # Optional:
+    # 'catch_up': True,     # If the cluster was down, process tasks that were scheduled during downtime
+    # 'sync': False,        # IMPORTANT: Keep False for asynchronous operation. True is for testing ONLY.
+}
+
+
+
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'America/Chicago'
 
 USE_I18N = True
 
@@ -160,3 +201,5 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 LOGIN_REDIRECT_URL = '/'  # Redirect to homepage (root URL) after successful login
 LOGOUT_REDIRECT_URL = '/' # Redirect to homepage after logout
+
+
