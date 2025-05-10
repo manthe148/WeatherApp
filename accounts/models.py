@@ -21,6 +21,23 @@ class SavedLocation(models.Model):
     # Optional: field to control display order
     # display_order = models.PositiveIntegerField(default=0)
 
+    LOCATION_TYPE_CHOICES = [
+        ('home', 'Home'),
+        ('work', 'Work'),
+        ('school', 'School'),
+        ('vacation', 'Vacation Spot'),
+        ('relative', "Relative's House"),
+        ('other', 'Other'),
+    ]
+    location_type_label = models.CharField(
+        max_length=20,
+        choices=LOCATION_TYPE_CHOICES,
+        default='other', # Default to 'Other'
+        blank=False, # Make it required, but with a default
+        null=False,
+        verbose_name="Location Label"
+    )
+
     class Meta:
         # Optional: order locations by when they were added (primary key)
         ordering = ['pk']

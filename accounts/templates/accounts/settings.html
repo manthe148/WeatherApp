@@ -33,12 +33,15 @@
         {% for loc in saved_locations %}
             {# Highlight default location visually #}
             <li style="border: 1px solid {% if loc.is_default %}#0d6efd{% else %}#eee{% endif %}; padding: 15px; margin-bottom: 10px; border-radius: 5px; {% if loc.is_default %}border-width: 2px; background-color: #e7f1ff;{% endif %}">
-                <strong>{{ loc.location_name }}</strong>
 
-                {# Show Default Badge #}
-                {% if loc.is_default %}
-                    <span class="badge bg-primary" style="margin-left: 10px; vertical-align: middle;">Default</span>
+                     <strong>{{ loc.location_name }}</strong>
+                 {% if loc.location_type_label %}
+                     <span class="badge bg-info ms-1">{{ loc.get_location_type_label_display }}</span> {# Display the type #}
+                 {% endif %}
+                 {% if loc.is_default %}
+                     <span class="badge bg-success ms-2">Default</span>
                 {% endif %}
+
                 <br>
                 <small>(Lat: {{ loc.latitude }}, Lon: {{ loc.longitude }})</small>
 
@@ -53,7 +56,7 @@
                 {% if not loc.is_default %}
                     <form method="post" action="{% url 'accounts:settings' %}" style="display: inline; margin-left: 5px;">
                         {% csrf_token %}
-                        <input type="hidden" name="make_default_location" value="{{ loc.pk }}">
+                        <input type="hidden" name="make_default_location_id" value="{{ loc.pk }}">
                         <button type="submit" class="btn btn-sm btn-outline-primary">Make Default</button>
                     </form>
                 {% endif %}
@@ -69,13 +72,27 @@
     <hr>
     <h4>Add New Location</h4>
     {# Manual Location Form #}
-    <form method="post" action="{% url 'accounts:settings' %}" style="margin-top: 1em;">
-        {% csrf_token %}
-        <label for="manual_location">Enter Location:</label><br>
-        <input type="text" id="manual_location" name="manual_location" placeholder="City, State or ZIP Code" required size="40">
-        <button type="submit" name="add_manual_location">Add Manual Location</button>
-    </form>
+            <form method="post" action="{% url 'accounts:settings' %}" style="margin-top: 1em;">
+            {% csrf_token %}
 
+            {# Dropdown for Location Label/Type #}
+            <div class="mb-3">
+                <label for="location_type_manual" class="form-label">Label for this location:</label>
+                <select name="location_type_manual" id="location_type_manual" class="form-select">
+                    {% for value, display_name in location_type_choices %}
+                        <option value="{{ value }}">{{ display_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            {# Text input for the actual location address/ZIP #}
+            <div class="mb-3">
+                <label for="manual_location" class="form-label">Enter Location Address/ZIP:</label>
+                <input type="text" class="form-control" id="manual_location" name="manual_location" placeholder="City, State or ZIP Code" required>
+            </div>
+
+            <button type="submit" name="add_manual_location" class="btn btn-primary">Add Manual Location</button>
+        </form>
     {# Browser Geolocation Button #}
     <div style="margin-top: 1em;">
         <button type="button" id="use-location-btn">Use My Current Location</button>
