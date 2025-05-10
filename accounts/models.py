@@ -1,50 +1,53 @@
+# accounts/models.py
 from django.db import models
-from django.conf import settings # Best practice for referring to User model
+from django.conf import settings
 
 class Profile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    # REMOVE these fields:
-    # default_latitude = models.DecimalField(...)
-    # default_longitude = models.DecimalField(...)
-    # default_location_name = models.CharField(...)
-
     def __str__(self):
         return f"{self.user.username}'s Profile"
 
-# --- ADD THIS NEW MODEL ---
 class SavedLocation(models.Model):
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='saved_locations')
     location_name = models.CharField(max_length=255)
     latitude = models.DecimalField(max_digits=9, decimal_places=6)
     longitude = models.DecimalField(max_digits=9, decimal_places=6)
     is_default = models.BooleanField(default=False)
-    # Optional: field to control display order
-    # display_order = models.PositiveIntegerField(default=0)
+
+    # --- Define choices and constants as class attributes BEFORE the field that uses them ---
+    LOCATION_TYPE_HOME = 'home'
+    LOCATION_TYPE_WORK = 'work'
+    LOCATION_TYPE_SCHOOL = 'school'
+    LOCATION_TYPE_VACATION = 'vacation'
+    LOCATION_TYPE_RELATIVE = 'relative'
+    LOCATION_TYPE_OTHER = 'other' # This constant will be used for the default
 
     LOCATION_TYPE_CHOICES = [
-        ('home', 'Home'),
-        ('work', 'Work'),
-        ('school', 'School'),
-        ('vacation', 'Vacation Spot'),
-        ('relative', "Relative's House"),
-        ('other', 'Other'),
+        (LOCATION_TYPE_HOME, 'Home'),
+        (LOCATION_TYPE_WORK, 'Work'),
+        (LOCATION_TYPE_SCHOOL, 'School'),
+        (LOCATION_TYPE_VACATION, 'Vacation Spot'),
+        (LOCATION_TYPE_RELATIVE, "Relative's House"),
+        (LOCATION_TYPE_OTHER, 'Other'),
     ]
+
     location_type_label = models.CharField(
         max_length=20,
-        choices=LOCATION_TYPE_CHOICES,
-        default='other', # Default to 'Other'
-        blank=False, # Make it required, but with a default
+        choices=LOCATION_TYPE_CHOICES,    # <-- Refer directly to the class attribute
+        default=LOCATION_TYPE_OTHER,      # <-- Refer directly to the class attribute
+        blank=False,
         null=False,
         verbose_name="Location Label"
     )
+    receive_notifications = models.BooleanField(default=True,
+                                              help_text="Receive push notifications for alerts at this location")
+    # --- End new field ---
 
     class Meta:
-        # Optional: order locations by when they were added (primary key)
         ordering = ['pk']
-        # Optional: prevent adding the exact same lat/lon twice for one user
-        # unique_together = [['profile', 'latitude', 'longitude']]
 
     def __str__(self):
-        # Show location name and associated user in Admin
-        return f"{self.location_name} (for {self.profile.user.username})"
-# --- END NEW MODEL ---
+        default_status = " (Default)" if self.is_default else ""
+        type_display = self.get_location_type_label_display() # This method is provided by Django for fields with choices
+        notif_status = " (Alerts ON)" if self.receive_notifications else " (Alerts OFF)"
+        return f"{self.location_name} ({type_display}){default_status}{notif_status} (for {self.profile.user.username})"

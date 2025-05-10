@@ -108,6 +108,28 @@ def user_settings_view(request):
                  messages.error(request, "Invalid location ID for deletion.")
             return redirect('accounts:settings')
 
+        # --- ADD THIS ELIF BLOCK FOR TOGGLING NOTIFICATIONS ---
+        elif 'toggle_notification_action' in request.POST: # Checks for the button name
+            location_id_to_toggle = request.POST.get('toggle_notification_loc_id')
+            print(f"DEBUG: Toggle notification action for loc_id: {location_id_to_toggle}")
+            if location_id_to_toggle:
+                try:
+                    loc_to_toggle = SavedLocation.objects.get(pk=location_id_to_toggle, profile=profile)
+                    loc_to_toggle.receive_notifications = not loc_to_toggle.receive_notifications # Toggle the boolean
+                    loc_to_toggle.save()
+                    status_text = "enabled" if loc_to_toggle.receive_notifications else "disabled"
+                    messages.success(request, f"Alert notifications {status_text} for '{loc_to_toggle.location_name}'.")
+                except SavedLocation.DoesNotExist:
+                    messages.error(request, "Location not found or permission denied.")
+                except Exception as e:
+                    messages.error(request, f"Error toggling notification status: {e}")
+                    print(f"Error toggling notifications: {e}")
+            else:
+                messages.error(request, "No location ID provided for toggling notifications.")
+            return redirect('accounts:settings')
+        # --- END TOGGLE NOTIFICATION BLOCK ---
+
+
         # --- Handle Manual Add ---
         elif 'add_manual_location' in request.POST:
             # `max_locations` is now in scope here

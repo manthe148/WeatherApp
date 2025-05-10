@@ -32,35 +32,52 @@
     <ul style="list-style: none; padding: 0;">
         {% for loc in saved_locations %}
             {# Highlight default location visually #}
-            <li style="border: 1px solid {% if loc.is_default %}#0d6efd{% else %}#eee{% endif %}; padding: 15px; margin-bottom: 10px; border-radius: 5px; {% if loc.is_default %}border-width: 2px; background-color: #e7f1ff;{% endif %}">
+         <li style="border: 1px solid #eee; padding: 10px; margin-bottom: 10px; border-radius: 4px; background-color: {% if loc.is_default %}#e6ffe6{% else %}#fff{% endif %};">
+    <strong>{{ loc.location_name }}</strong>
+    {% if loc.location_type_label %}
+        <span class="badge bg-info ms-1">{{ loc.get_location_type_label_display }}</span>
+    {% endif %}
+    {% if loc.is_default %}
+        <span class="badge bg-success ms-2">Default</span>
+    {% endif %}
 
-                     <strong>{{ loc.location_name }}</strong>
-                 {% if loc.location_type_label %}
-                     <span class="badge bg-info ms-1">{{ loc.get_location_type_label_display }}</span> {# Display the type #}
-                 {% endif %}
-                 {% if loc.is_default %}
-                     <span class="badge bg-success ms-2">Default</span>
-                {% endif %}
+    {# Notification Status & Toggle Button #}
+    {% if loc.receive_notifications %}
+        <span class="badge bg-primary ms-2">Alerts ON</span>
+    {% else %}
+        <span class="badge bg-secondary ms-2">Alerts OFF</span>
+    {% endif %}
+    <br>
+    <small>(Lat: {{ loc.latitude }}, Lon: {{ loc.longitude }})</small>
 
-                <br>
-                <small>(Lat: {{ loc.latitude }}, Lon: {{ loc.longitude }})</small>
+    {# Delete Form #}
+    <form method="post" action="{% url 'accounts:settings' %}" style="display: inline; margin-left: 15px;">
+        {% csrf_token %}
+        <input type="hidden" name="delete_location" value="{{ loc.pk }}">
+        <button type="submit" onclick="return confirm('Are you sure?');" class="btn btn-sm btn-outline-danger py-0">Delete</button>
+    </form>
 
-                {# Delete Form #}
-                <form method="post" action="{% url 'accounts:settings' %}" style="display: inline; margin-left: 15px;">
-                    {% csrf_token %}
-                    <input type="hidden" name="delete_location" value="{{ loc.pk }}">
-                    <button type="submit" onclick="return confirm('Delete this location?');" class="btn btn-sm btn-outline-danger">Delete</button>
-                </form>
+    {# "Make Default" Button #}
+    {% if not loc.is_default %}
+        <form method="post" action="{% url 'accounts:settings' %}" style="display: inline; margin-left: 5px;">
+            {% csrf_token %}
+            <input type="hidden" name="make_default_location_id" value="{{ loc.pk }}">
+            <button type="submit" name="set_as_default_action" class="btn btn-sm btn-outline-secondary py-0">Make Default</button>
+        </form>
+    {% endif %}
 
-                {# 'Make Default' Button Form (Show only if NOT already default) #}
-                {% if not loc.is_default %}
-                    <form method="post" action="{% url 'accounts:settings' %}" style="display: inline; margin-left: 5px;">
-                        {% csrf_token %}
-                        <input type="hidden" name="make_default_location_id" value="{{ loc.pk }}">
-                        <button type="submit" class="btn btn-sm btn-outline-primary">Make Default</button>
-                    </form>
-                {% endif %}
-            </li>
+    {# --- ADD Toggle Notification Button --- #}
+    <form method="post" action="{% url 'accounts:settings' %}" style="display: inline; margin-left: 5px;">
+        {% csrf_token %}
+        <input type="hidden" name="toggle_notification_loc_id" value="{{ loc.pk }}">
+        {% if loc.receive_notifications %}
+            <button type="submit" name="toggle_notification_action" class="btn btn-sm btn-warning py-0">Disable Alerts</button>
+        {% else %}
+            <button type="submit" name="toggle_notification_action" class="btn btn-sm btn-success py-0">Enable Alerts</button>
+        {% endif %}
+    </form>
+    {# --- END Toggle Notification Button --- #}
+</li>
         {% endfor %}
     </ul>
 {% else %}

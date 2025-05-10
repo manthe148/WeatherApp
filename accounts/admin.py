@@ -9,7 +9,7 @@ class ProfileAdmin(admin.ModelAdmin):
 # Register SavedLocation
 @admin.register(SavedLocation)
 class SavedLocationAdmin(admin.ModelAdmin):
-    list_display = ('location_name', 'profile', 'location_type_label', 'is_default', 'latitude', 'longitude') # Added
-    list_filter = ('profile__user', 'is_default', 'location_type_label') # Added
+    list_display = ('location_name', 'profile', 'location_type_label', 'is_default', 'receive_notifications', 'latitude', 'longitude') # Added receive_notifications
+    list_filter = ('profile__user', 'is_default', 'location_type_label', 'receive_notifications') # Added
     search_fields = ('location_name', 'profile__user__username')
     actions = ['make_default']
