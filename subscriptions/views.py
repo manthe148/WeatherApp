@@ -1,46 +1,93 @@
-# --- Ensure ALL these imports are present at the TOP ---
+# subscriptions/views.py
+
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
-from .models import Plan, Subscription
-from django.views.generic import TemplateView
-import stripe
 from django.urls import reverse
+from django.views.generic import TemplateView
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseServerError, JsonResponse
 from django.contrib.auth import get_user_model
 from django.contrib import messages
-from decimal import Decimal, InvalidOperation # Keep if settings view is in this file
-from datetime import datetime, timezone # Moved to top
-import traceback # ADDED import
-import json # Keep just in case
-from push_notifications.models import WebPushDevice # The model to store subscription
+from django.db import transaction
 
-# --- End Imports ---
+import stripe
+import json
+import traceback
+from datetime import datetime, timezone
 
+from .models import Plan, Subscription, NotifiedAlert # Your subscription models
+from push_notifications.models import WebPushDevice # For saving push subscriptions
+# from accounts.models import Profile, SavedLocation # Only if directly needed by these views
 
-# Add other imports from previous steps if needed (like messages, geopy etc for other views)
+User = get_user_model()
 
+# --- Subscription Lifecycle Views ---
 class SubscriptionSuccessView(TemplateView):
     template_name = 'subscriptions/success.html'
 
 class SubscriptionCancelView(TemplateView):
     template_name = 'subscriptions/cancel.html'
 
+
+
+@login_required
+def create_customer_portal_session_view(request):
+    """
+    Creates a Stripe Billing Portal session for the logged-in user
+    and redirects them to the portal.
+    """
+    try:
+        # Get the user's local subscription record
+        # Assuming OneToOneField from User to Subscription is named 'subscription'
+        # or ForeignKey from Subscription to User
+        user_subscription = Subscription.objects.get(user=request.user)
+
+        if not user_subscription.stripe_customer_id:
+            messages.error(request, "Could not find your Stripe customer information.")
+            return redirect('accounts:settings') # Or wherever appropriate
+
+        if not user_subscription.is_active(): # Use your model's method
+             messages.warning(request, "You do not have an active subscription to manage.")
+             return redirect('subscriptions:plan_selection')
+
+
+        stripe.api_key = settings.STRIPE_SECRET_KEY
+
+        # URL to redirect back to after the portal session (e.g., user's settings page)
+        return_url = request.build_absolute_uri(reverse('accounts:settings'))
+
+        portal_session = stripe.billing_portal.Session.create(
+            customer=user_subscription.stripe_customer_id,
+            return_url=return_url,
+        )
+        # Redirect to the portal_session.url
+        return redirect(portal_session.url, status=303)
+
+    except Subscription.DoesNotExist:
+        messages.warning(request, "You do not seem to have a subscription to manage.")
+        return redirect('subscriptions:plan_selection') # Or 'accounts:settings'
+    except stripe.error.StripeError as e:
+        messages.error(request, f"Could not connect to subscription portal: {e}")
+        print(f"Stripe Error creating portal session: {e}")
+        return redirect('accounts:settings')
+    except Exception as e:
+        messages.error(request, f"An unexpected error occurred: {e}")
+        print(f"Unexpected error creating portal session: {e}")
+        traceback.print_exc() # Ensure traceback is imported
+        return redirect('accounts:settings')
+
+
+
 @login_required
 def subscription_plan_view(request):
-    # Fetch all available plans from your database
-    # You might want to filter this later (e.g., exclude a "Free" plan)
-    plans = Plan.objects.all().order_by('price') # Order by price
-
+    plans = Plan.objects.all().order_by('price')
     context = {
         'plans': plans,
         'stripe_publishable_key': settings.STRIPE_PUBLISHABLE_KEY
     }
     return render(request, 'subscriptions/plan_selection.html', context)
-
-# Add this function back into subscriptions/views.py
 
 @require_POST
 @login_required
@@ -63,323 +110,358 @@ def create_checkout_session_view(request):
         messages.error(request, f"Error building redirect URLs: {e}")
         return redirect('subscriptions:plan_selection')
 
-    # --- Prepare parameters for Stripe Session ---
     session_params = {
-        'line_items': [{
-            'price': price_id,
-            'quantity': 1,
-        }],
+        'line_items': [{'price': price_id, 'quantity': 1}],
         'mode': 'subscription',
         'success_url': success_url,
         'cancel_url': cancel_url,
-        'client_reference_id': request.user.id,
-        'payment_method_types': ['card'], # Good to be explicit
+        'client_reference_id': str(request.user.id), # Ensure it's a string
+        'payment_method_types': ['card'],
     }
 
-    # --- Conditionally add customer_email ---
     if request.user.email:
         session_params['customer_email'] = request.user.email
-    # --- End conditional email ---
 
     try:
-        # Create the session using the prepared parameters dictionary
-        checkout_session = stripe.checkout.Session.create(**session_params) # Use ** to unpack dict
-
+        checkout_session = stripe.checkout.Session.create(**session_params)
         return redirect(checkout_session.url, status=303)
-
     except stripe.error.StripeError as e:
         messages.error(request, f"Error communicating with Stripe: {e}")
-        print(f"Stripe Error: {e}")
+        print(f"Stripe Error creating checkout session: {e}")
         return redirect('subscriptions:plan_selection')
     except Exception as e:
         messages.error(request, f"An unexpected error occurred: {e}")
-        print(f"Checkout Error: {e}")
-        traceback.print_exc() # Keep traceback for debugging
+        print(f"Checkout session creation Error: {e}")
+        traceback.print_exc()
         return redirect('subscriptions:plan_selection')
 
-# --- End of create_checkout_session_view function ---
-
-# Make sure stripe_webhook_view and other views/classes are still present below this
-
-# --- CORRECTED Webhook View ---
+# --- Stripe Webhook Handler ---
 @csrf_exempt
 @require_POST
 def stripe_webhook_view(request):
-    """Listens for events from Stripe."""
     payload = request.body
     sig_header = request.headers.get('stripe-signature')
     endpoint_secret = settings.STRIPE_WEBHOOK_SECRET
     event = None
 
-    # Verification Try/Except Block
+    # Ensure API key is set for this view's Stripe calls
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+
     try:
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, endpoint_secret
-        )
-        print(f"Webhook received: Event ID: {event.id}, Type: {event.type}")
+        event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
+        print(f"\nWebhook received: Event ID: {event.id}, Type: {event.type}")
     except ValueError as e:
-        print(f"Webhook error parsing payload: {e}")
+        print(f"!!! Webhook error parsing payload: {e}")
         return HttpResponseBadRequest("Invalid payload")
     except stripe.error.SignatureVerificationError as e:
-        print(f"Webhook signature verification failed: {e}")
+        print(f"!!! Webhook signature verification failed: {e}")
         return HttpResponseBadRequest("Invalid signature")
-    except Exception as e: # Catch any other construction errors
-        print(f"Webhook construction error: {e}")
-        traceback.print_exc() # Print traceback for construction errors too
+    except Exception as e:
+        print(f"!!! Webhook construction error: {e}")
+        traceback.print_exc()
         return HttpResponseBadRequest(f"Webhook construction error: {e}")
 
-    # --- Handle the checkout.session.completed event ---
+    # --- Handle checkout.session.completed event ---
     if event.type == 'checkout.session.completed':
         session = event.data.object
-        print(f"Processing checkout.session.completed for session {session.id}")
+        print(f"--- Processing checkout.session.completed ---")
+        print(f"  Stripe Session ID: {session.id}")
+        print(f"  Stripe Customer ID from session: {session.get('customer')}")
+        print(f"  Stripe Subscription ID from session: {session.get('subscription')}")
+        print(f"  Client Reference ID (Django User ID) from session: {session.get('client_reference_id')}")
 
         client_reference_id = session.get('client_reference_id')
-        stripe_customer_id = session.get('customer')
-        stripe_subscription_id = session.get('subscription')
+        stripe_customer_id_from_session = session.get('customer')
+        stripe_subscription_id_from_session = session.get('subscription')
 
-        if client_reference_id is None:
-            print("Webhook error: client_reference_id missing in checkout session.")
-            return HttpResponseBadRequest("Missing client_reference_id.")
+        if not all([client_reference_id, stripe_customer_id_from_session, stripe_subscription_id_from_session]):
+            error_msg = "Webhook error: Missing critical IDs in checkout.session.completed!"
+            print(f"  !!! {error_msg} - ClientRef: {client_reference_id}, CustID: {stripe_customer_id_from_session}, SubID: {stripe_subscription_id_from_session}")
+            return HttpResponseBadRequest("Missing critical IDs in session.")
 
         User = get_user_model()
         try:
             user = User.objects.get(id=client_reference_id)
-            print(f"Found user: {user.username}")
+            print(f"  Found Django User: {user.username} (ID: {user.id})")
 
-            if stripe_subscription_id:
-                # --- Inner Try/Except for Stripe API calls and DB operations ---
-                try:
-                    print(f"Attempting to retrieve Stripe Subscription ID: {stripe_subscription_id}")
-                    stripe_sub = stripe.Subscription.retrieve(stripe_subscription_id)
-                    print(f"Retrieved Stripe Subscription. Status: {stripe_sub.status}")
+            try:
+                print(f"  Attempting to retrieve Stripe Subscription object with ID: {stripe_subscription_id_from_session}")
+                stripe_sub_object = stripe.Subscription.retrieve(stripe_subscription_id_from_session)
+                print(f"  Successfully retrieved Stripe Subscription object. Status: {stripe_sub_object.status}")
+                print(f"    Stripe Sub Plan ID (Price ID): {stripe_sub_object.plan.id if stripe_sub_object.plan else 'None'}")
+                print(f"    Stripe Sub Current Period End Timestamp: {stripe_sub_object.get('current_period_end')}")
+                print(f"    Stripe Sub Trial End Timestamp: {stripe_sub_object.get('trial_end')}")
 
-                    stripe_price_id = stripe_sub.plan.id
-                    period_end_timestamp = stripe_sub.get('current_period_end') # Use .get() for safety
-                    print(f"Stripe Subscription Period End Timestamp: {period_end_timestamp}")
 
-                    current_period_end_dt = None
-                    if period_end_timestamp is not None:
-                        try:
-                            current_period_end_dt = datetime.fromtimestamp(period_end_timestamp, tz=timezone.utc)
-                            print(f"Converted Period End Datetime: {current_period_end_dt}")
-                        except Exception as e_conv:
-                            print(f"!!! ERROR converting timestamp {period_end_timestamp}: {e_conv}")
-
-                    # Find Plan in DB
+                stripe_price_id = stripe_sub_object.plan.id if stripe_sub_object.plan else None
+                period_end_timestamp = stripe_sub_object.get('current_period_end') or stripe_sub_object.get('trial_end')
+                
+                current_period_end_dt = None
+                if period_end_timestamp is not None:
                     try:
-                        plan = Plan.objects.get(stripe_price_id=stripe_price_id)
-                        print(f"Found plan in DB: {plan.name}")
+                        current_period_end_dt = datetime.fromtimestamp(period_end_timestamp, tz=timezone.utc)
+                        print(f"      Converted Period End Datetime: {current_period_end_dt}")
+                    except Exception as e_conv:
+                        print(f"      !!! ERROR converting timestamp {period_end_timestamp}: {e_conv}")
+                
+                if not stripe_price_id:
+                    print(f"  !!! Webhook Error: Retrieved Stripe Subscription (ID: {stripe_subscription_id_from_session}) is missing a plan ID.")
+                    return HttpResponseServerError("Stripe Subscription missing plan ID.")
 
-                        # Update/Create Subscription in DB
-                        subscription, created = Subscription.objects.update_or_create(
+                try:
+                    local_plan_obj = Plan.objects.get(stripe_price_id=stripe_price_id)
+                    print(f"  Found local Plan in DB: {local_plan_obj.name}")
+
+                    subscription_defaults = {
+                        'plan': local_plan_obj,
+                        'stripe_subscription_id': stripe_subscription_id_from_session,
+                        'stripe_customer_id': stripe_customer_id_from_session,
+                        'status': stripe_sub_object.status,
+                        'current_period_end': current_period_end_dt,
+                    }
+                    print(f"  Attempting update_or_create Subscription with defaults: {subscription_defaults}")
+
+                    with transaction.atomic():
+                        local_subscription, created = Subscription.objects.update_or_create(
                             user=user,
-                            defaults={
-                                'plan': plan,
-                                'stripe_subscription_id': stripe_subscription_id,
-                                'stripe_customer_id': stripe_customer_id,
-                                'status': stripe_sub.status,
-                                'current_period_end': current_period_end_dt,
-                            }
+                            defaults=subscription_defaults
                         )
-                        if created:
-                            print(f"CREATED Subscription DB record for user {user.username}")
-                        else:
-                            print(f"UPDATED Subscription DB record for user {user.username}")
+                    
+                    if created:
+                        print(f"  CREATED local Subscription DB record for user {user.username}. ID: {local_subscription.pk}")
+                    else:
+                        print(f"  UPDATED local Subscription DB record for user {user.username}. ID: {local_subscription.pk}")
+                    print(f"    Local sub final status: {local_subscription.status}, period_end: {local_subscription.current_period_end}")
 
-                    except Plan.DoesNotExist:
-                        print(f"!!! Webhook error: Plan with Stripe Price ID {stripe_price_id} not found in database.")
-                        return HttpResponseServerError("Plan not found in DB.")
-                    except Exception as e_db: # Catch DB specific errors
-                        print(f"!!! Webhook error saving to DB: {e_db}")
-                        traceback.print_exc() # Print DB error traceback
-                        return HttpResponseServerError("DB error saving subscription.")
+                except Plan.DoesNotExist:
+                    print(f"  !!! Webhook error: Local Plan with Stripe Price ID {stripe_price_id} not found.")
+                    return HttpResponseServerError("Local Plan not found.")
+                except Exception as e_db:
+                    print(f"  !!! Webhook error saving local Subscription to DB: {e_db}")
+                    traceback.print_exc()
+                    return HttpResponseServerError("DB error saving local subscription.")
 
-                # Correct placement for StripeError exception
-                except stripe.error.StripeError as e_sub:
-                    print(f"!!! Webhook error retrieving/processing Stripe Subscription {stripe_subscription_id}: {e_sub}")
-                    traceback.print_exc() # Print traceback for Stripe errors
-                    return HttpResponseServerError("Stripe API error during subscription processing.")
-                # Correct placement for the general exception handler
-                except Exception as e_inner:
-                    print(f"!!! Webhook error processing subscription inner: {e_inner}")
-                    traceback.print_exc() # <--- PRINT TRACEBACK HERE
-                    return HttpResponseServerError("Internal server error processing subscription.")
-                # --- End Inner Try/Except ---
-            else:
-                print("!!! Webhook error: stripe_subscription_id missing in checkout session.")
-                return HttpResponseBadRequest("Missing subscription ID.")
+            except stripe.error.StripeError as e_sub_retrieve:
+                print(f"  !!! Webhook error retrieving Stripe Subscription {stripe_subscription_id_from_session}: {e_sub_retrieve}")
+                traceback.print_exc()
+                return HttpResponseServerError("Stripe API error retrieving subscription.")
+            except Exception as e_inner_processing:
+                print(f"  !!! Webhook error during inner processing for user {user.username}: {e_inner_processing}")
+                traceback.print_exc()
+                return HttpResponseServerError("Inner processing error during subscription update.")
 
         except User.DoesNotExist:
-            print(f"Webhook error: User with ID {client_reference_id} not found.")
-            return HttpResponseBadRequest("User not found.")
-        # Let other unexpected errors bubble up if needed during debugging,
-        # or add a final broad except Exception here if necessary for production.
+            print(f"  Webhook error: User with client_reference_id {client_reference_id} not found.")
+            return HttpResponseBadRequest("User not found from client_reference_id.")
+        
+        print(f"--- Finished processing checkout.session.completed successfully ---")
+        return HttpResponse(status=200)
 
-    # --- Handle other event types ---
-    # --- Handle invoice.paid (Subscription Renewal/Payment Success) ---
+    # --- Handle successful payment (renewal) ---
     elif event.type == 'invoice.paid':
         invoice = event.data.object
         stripe_subscription_id = invoice.get('subscription')
-        print(f"Processing {event.type} for subscription {stripe_subscription_id}")
+        stripe_customer_id = invoice.get('customer')
+        print(f"Processing 'invoice.paid' for subscription_id: {stripe_subscription_id}, customer_id: {stripe_customer_id}")
 
-        if invoice.get('billing_reason') == 'subscription_cycle' and invoice.get('status') == 'paid' and stripe_subscription_id:
+        if invoice.get('billing_reason') == 'subscription_cycle' and invoice.get('paid') and stripe_subscription_id:
             try:
-                # Retrieve the latest subscription details from Stripe
                 stripe_sub = stripe.Subscription.retrieve(stripe_subscription_id)
-                # Find the corresponding subscription in your database
-                subscription = Subscription.objects.get(stripe_subscription_id=stripe_subscription_id)
+                local_subscription = Subscription.objects.get(stripe_subscription_id=stripe_subscription_id)
 
-                # Update status and period end based on the latest Stripe data
-                subscription.status = stripe_sub.status # Should be 'active'
+                local_subscription.status = stripe_sub.status
                 new_period_end_dt = None
                 if stripe_sub.current_period_end:
                     try:
                         new_period_end_dt = datetime.fromtimestamp(stripe_sub.current_period_end, tz=timezone.utc)
                     except Exception as e_conv:
-                        print(f"!!! ERROR converting timestamp {stripe_sub.current_period_end} for invoice.paid: {e_conv}")
-
-                subscription.current_period_end = new_period_end_dt
-                subscription.save(update_fields=['status', 'current_period_end']) # Save only changed fields
-                print(f"Updated subscription {stripe_subscription_id} on {event.type}. Status: {subscription.status}, New Period End: {subscription.current_period_end}")
-
+                        print(f"  !!! ERROR converting current_period_end timestamp {stripe_sub.current_period_end} for invoice.paid: {e_conv}")
+                local_subscription.current_period_end = new_period_end_dt
+                
+                if not local_subscription.stripe_customer_id and stripe_customer_id: # Should already be set
+                    local_subscription.stripe_customer_id = stripe_customer_id
+                
+                local_subscription.save()
+                print(f"  Updated subscription {stripe_subscription_id} on {event.type}. Status: {local_subscription.status}, New Period End: {local_subscription.current_period_end}")
             except Subscription.DoesNotExist:
-                print(f"!!! Error: Subscription {stripe_subscription_id} not found in DB for {event.type}.")
-            except stripe.error.StripeError as e:
-                print(f"!!! Stripe Error handling {event.type} for {stripe_subscription_id}: {e}")
-                # Don't return 500 immediately, Stripe might retry. Log carefully.
-            except Exception as e:
-                print(f"!!! Error handling {event.type} for {stripe_subscription_id}: {e}")
+                print(f"  !!! Webhook Error (invoice.paid): Subscription {stripe_subscription_id} not found in local DB.")
+            except stripe.error.StripeError as e_stripe:
+                print(f"  !!! Stripe API Error (invoice.paid) for {stripe_subscription_id}: {e_stripe}")
+            except Exception as e_general:
+                print(f"  !!! General Error (invoice.paid) for {stripe_subscription_id}: {e_general}")
                 traceback.print_exc()
         else:
-            print(f"Ignoring {event.type} event (Reason: {invoice.get('billing_reason')}, Status: {invoice.get('status')})")
+            print(f"  Ignoring '{event.type}' (Reason: {invoice.get('billing_reason')}, Paid: {invoice.get('paid')}, SubID: {stripe_subscription_id})")
+        return HttpResponse(status=200)
+
+    elif event.type == 'customer.subscription.created' or event.type == 'customer.subscription.updated':
+            stripe_sub_object = event.data.object  # The event data IS the subscription object
+            stripe_subscription_id = stripe_sub_object.id
+            stripe_customer_id = stripe_sub_object.customer 
+            
+            print(f"--- Processing '{event.type}' for subscription {stripe_subscription_id} ---")
+            print(f"  Stripe Sub Status: {stripe_sub_object.status}")
+            print(f"  Stripe Sub Plan ID (Price ID): {stripe_sub_object.plan.id if stripe_sub_object.plan else 'None'}")
+            print(f"  Stripe Sub Current Period End Timestamp: {stripe_sub_object.get('current_period_end')}") # <<< Key log
+            print(f"  Stripe Sub Trial End Timestamp: {stripe_sub_object.get('trial_end')}")
+            print(f"  Stripe Sub Canceled At Timestamp: {stripe_sub_object.get('canceled_at')}")
+            print(f"  Stripe Sub Ended At Timestamp: {stripe_sub_object.get('ended_at')}")
+
+            try:
+                # User should already exist if checkout.session.completed was processed
+                # Find the local subscription record by Stripe Subscription ID
+                # It should have been created by checkout.session.completed handler
+                local_subscription = Subscription.objects.get(stripe_subscription_id=stripe_subscription_id)
+                print(f"  Found local subscription for user: {local_subscription.user.username}")
+
+                # Update status
+                local_subscription.status = stripe_sub_object.status
+                
+                # Update current_period_end (prioritize current_period_end, then trial_end)
+                new_period_end_dt = None
+                timestamp_to_use = stripe_sub_object.get('current_period_end') or stripe_sub_object.get('trial_end')
+                
+                if stripe_sub_object.status == 'canceled' and stripe_sub_object.get('canceled_at'):
+                    timestamp_to_use = stripe_sub_object.get('canceled_at')
+                elif stripe_sub_object.get('ended_at'): # If it's definitively ended
+                     timestamp_to_use = stripe_sub_object.get('ended_at')
+
+                if timestamp_to_use is not None:
+                    try:
+                        new_period_end_dt = datetime.fromtimestamp(timestamp_to_use, tz=timezone.utc)
+                        print(f"    Converted timestamp ({timestamp_to_use}) for period_end: {new_period_end_dt}")
+                    except Exception as e_conv:
+                        print(f"  !!! ERROR converting timestamp {timestamp_to_use} for {event.type}: {e_conv}")
+                local_subscription.current_period_end = new_period_end_dt
+
+                # Update plan if it changed
+                if stripe_sub_object.plan and \
+                   (local_subscription.plan is None or local_subscription.plan.stripe_price_id != stripe_sub_object.plan.id):
+                    try:
+                        new_plan_from_stripe = Plan.objects.get(stripe_price_id=stripe_sub_object.plan.id)
+                        local_subscription.plan = new_plan_from_stripe
+                        print(f"  Updated local plan to: {new_plan_from_stripe.name}")
+                    except Plan.DoesNotExist:
+                        print(f"  !!! Error: New plan {stripe_sub_object.plan.id} not found in local DB during {event.type}.")
+                        # Potentially log this as an error and don't change plan, or set plan to None
+                        # local_subscription.plan = None 
+                
+                # Ensure customer_id is up-to-date
+                if not local_subscription.stripe_customer_id and stripe_customer_id:
+                    local_subscription.stripe_customer_id = stripe_customer_id
+                elif local_subscription.stripe_customer_id != stripe_customer_id: # Should not happen for same sub
+                     local_subscription.stripe_customer_id = stripe_customer_id # Update if different
 
 
-    # --- Handle subscription updates/cancellations ---
-    elif event.type in ['customer.subscription.updated', 'customer.subscription.deleted']:
-        stripe_sub = event.data.object # The event data *is* the subscription object
+                local_subscription.save()
+                print(f"  Updated local subscription {stripe_subscription_id} on '{event.type}'. New status: {local_subscription.status}, Period End: {local_subscription.current_period_end}")
+
+            except Subscription.DoesNotExist:
+                print(f"  !!! Webhook Error ({event.type}): Subscription {stripe_subscription_id} not found in local DB. This might be an issue if checkout.session.completed was missed or failed.")
+                # If it doesn't exist, we might want to create it here if we can reliably find the user.
+                # This requires client_reference_id from the session, which isn't directly on the subscription event.
+                # For now, we primarily rely on checkout.session.completed to create it.
+            except Exception as e_general:
+                print(f"  !!! General Error handling '{event.type}' for subscription {stripe_subscription_id}: {e_general}")
+                traceback.print_exc()
+                return HttpResponseServerError(f"Server error processing {event.type}")
+            
+            print(f"--- Finished processing {event.type} ---")
+            return HttpResponse(status=200)
+
+
+
+
+    # --- Handle subscription updates & deletions ---
+    elif event.type == 'customer.subscription.updated' or event.type == 'customer.subscription.deleted':
+        stripe_sub = event.data.object
         stripe_subscription_id = stripe_sub.id
-        print(f"Processing {event.type} for subscription {stripe_subscription_id}")
-
+        print(f"Processing '{event.type}' for subscription {stripe_subscription_id}")
         try:
-            subscription = Subscription.objects.get(stripe_subscription_id=stripe_subscription_id)
-
-            # Update status from the received object
-            subscription.status = stripe_sub.status # e.g., 'active', 'canceled', 'past_due'
-
-            # Update period end (might be None if canceled immediately)
+            local_subscription = Subscription.objects.get(stripe_subscription_id=stripe_subscription_id)
+            local_subscription.status = stripe_sub.status
+            
             new_period_end_dt = None
-            if stripe_sub.current_period_end:
-                try:
-                    new_period_end_dt = datetime.fromtimestamp(stripe_sub.current_period_end, tz=timezone.utc)
-                except Exception as e_conv:
-                     print(f"!!! ERROR converting timestamp {stripe_sub.current_period_end} for {event.type}: {e_conv}")
-            elif stripe_sub.status == 'canceled' and stripe_sub.canceled_at:
-                # If canceled, maybe use the cancellation time as the effective end
-                try:
-                     new_period_end_dt = datetime.fromtimestamp(stripe_sub.canceled_at, tz=timezone.utc)
-                except Exception as e_conv:
-                     print(f"!!! ERROR converting canceled_at timestamp {stripe_sub.canceled_at} for {event.type}: {e_conv}")
+            timestamp_to_use_for_period_end = stripe_sub.get('current_period_end')
+            if stripe_sub.status == 'canceled' and stripe_sub.get('canceled_at'):
+                timestamp_to_use_for_period_end = stripe_sub.get('canceled_at')
+            elif stripe_sub.get('ended_at'):
+                 timestamp_to_use_for_period_end = stripe_sub.get('ended_at')
 
-            subscription.current_period_end = new_period_end_dt
+            if timestamp_to_use_for_period_end is not None:
+                try: new_period_end_dt = datetime.fromtimestamp(timestamp_to_use_for_period_end, tz=timezone.utc)
+                except Exception as e: print(f"  !!! Error converting final timestamp: {e}")
+            local_subscription.current_period_end = new_period_end_dt
 
-            # Check if plan changed (for 'updated' events)
-            current_plan_price_id = stripe_sub.plan.id
-            if subscription.plan is None or subscription.plan.stripe_price_id != current_plan_price_id:
+            if stripe_sub.plan and (not local_subscription.plan or local_subscription.plan.stripe_price_id != stripe_sub.plan.id):
                 try:
-                    new_plan = Plan.objects.get(stripe_price_id=current_plan_price_id)
-                    subscription.plan = new_plan
-                    print(f"Updated plan for subscription {stripe_subscription_id} to {new_plan.name}")
+                    new_plan_from_stripe = Plan.objects.get(stripe_price_id=stripe_sub.plan.id)
+                    local_subscription.plan = new_plan_from_stripe
+                    print(f"  Updated plan for subscription {stripe_subscription_id} to {new_plan_from_stripe.name}")
                 except Plan.DoesNotExist:
-                    print(f"!!! Error: New plan {current_plan_price_id} not found in DB.")
-                    subscription.plan = None # Or handle differently
-
-            subscription.save()
-            print(f"Updated subscription {stripe_subscription_id} on {event.type}. Status: {subscription.status}")
-
+                    print(f"  !!! Error: New plan {stripe_sub.plan.id} not found in DB during {event.type}.")
+            
+            local_subscription.save()
+            print(f"  Updated local subscription {stripe_subscription_id} on '{event.type}'. New status: {local_subscription.status}, Period End: {local_subscription.current_period_end}")
         except Subscription.DoesNotExist:
-            print(f"!!! Error: Subscription {stripe_subscription_id} not found in DB for {event.type}.")
-        except Exception as e:
-            print(f"!!! Error handling {event.type} for {stripe_subscription_id}: {e}")
+            print(f"  !!! Webhook Error ({event.type}): Subscription {stripe_subscription_id} not found.")
+        except Exception as e_general:
+            print(f"  !!! General Error ({event.type}) for {stripe_subscription_id}: {e_general}")
             traceback.print_exc()
+        return HttpResponse(status=200)
 
     # --- Handle failed payments ---
     elif event.type == 'invoice.payment_failed':
         invoice = event.data.object
         stripe_subscription_id = invoice.get('subscription')
-        print(f"Processing {event.type} for subscription {stripe_subscription_id}")
-
+        print(f"Processing '{event.type}' for subscription {stripe_subscription_id}")
         if stripe_subscription_id:
             try:
-                # Find the subscription and update status based on Stripe's state after failure
                 stripe_sub = stripe.Subscription.retrieve(stripe_subscription_id)
-                subscription = Subscription.objects.get(stripe_subscription_id=stripe_subscription_id)
-                subscription.status = stripe_sub.status # Could be 'past_due', 'unpaid', or even 'canceled'
-                subscription.save(update_fields=['status'])
-                print(f"Updated subscription {stripe_subscription_id} status to '{subscription.status}' on {event.type}.")
+                local_subscription = Subscription.objects.get(stripe_subscription_id=stripe_subscription_id)
+                local_subscription.status = stripe_sub.status 
+                local_subscription.save(update_fields=['status'])
+                print(f"  Updated subscription {stripe_subscription_id} status to '{local_subscription.status}' on '{event.type}'.")
             except Subscription.DoesNotExist:
-                 print(f"!!! Error: Subscription {stripe_subscription_id} not found in DB for {event.type}.")
+                print(f"  !!! Webhook Error ({event.type}): Subscription {stripe_subscription_id} not found.")
             except stripe.error.StripeError as e:
-                 print(f"!!! Stripe Error handling {event.type} for {stripe_subscription_id}: {e}")
+                print(f"  !!! Stripe Error handling {event.type} for {stripe_subscription_id}: {e}")
             except Exception as e:
-                 print(f"!!! Error handling {event.type} for {stripe_subscription_id}: {e}")
-                 traceback.print_exc()
+                print(f"  !!! Error handling {event.type} for {stripe_subscription_id}: {e}")
+                traceback.print_exc()
         else:
-            print(f"Ignoring {event.type} as no subscription ID was found on the invoice.")
+            print(f"  Ignoring {event.type} as no subscription ID was found on the invoice.")
+        return HttpResponse(status=200)
 
     else:
         print(f"Unhandled event type {event.type}")
+        return HttpResponse(status=200)
 
-    # Acknowledge receipt to Stripe
-    return HttpResponse(status=200)
 
+# --- Save Push Subscription View (Keep this as it was) ---
 @login_required
-@require_POST # Expecting POST request with JSON data
+@require_POST
 def save_push_subscription_view(request):
-    """
-    Saves the PushSubscription object received from the browser
-    to a WebPushDevice linked to the logged-in user.
-    """
+    # ... your existing save_push_subscription_view code ...
     try:
-        # Load the JSON data sent from the frontend
         data = json.loads(request.body)
     except json.JSONDecodeError:
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
-
-    # Basic validation of the received data structure
     if not data or 'endpoint' not in data or 'keys' not in data or \
        'p256dh' not in data['keys'] or 'auth' not in data['keys']:
         return JsonResponse({'status': 'error', 'message': 'Invalid subscription data format'}, status=400)
-
-    # Extract subscription details
     endpoint = data['endpoint']
     p256dh = data['keys']['p256dh']
     auth = data['keys']['auth']
-
     try:
-        # Use update_or_create to handle existing subscriptions for the same endpoint/user
-        # or create a new one. We link it to the request.user.
-        # 'registration_id' is the field WebPushDevice uses for the endpoint URL.
-        # 'p256dh' and 'auth' are the fields for the keys.
         device, created = WebPushDevice.objects.update_or_create(
-            user=request.user,
-            registration_id=endpoint,
-            defaults={
-                'p256dh': p256dh,
-                'auth': auth,
-                'active': True, # Mark device as active
-                # Optional: You might want to set the browser based on request headers
-                # 'browser': request.headers.get('User-Agent', '')[:100] # Example
-            }
+            user=request.user, registration_id=endpoint,
+            defaults={'p256dh': p256dh, 'auth': auth, 'active': True}
         )
-
-        if created:
-            print(f"Saved new push device for user {request.user.username}")
-        else:
-            print(f"Updated existing push device for user {request.user.username}")
-
+        if created: print(f"Saved new push device for user {request.user.username}")
+        else: print(f"Updated existing push device for user {request.user.username}")
         return JsonResponse({'status': 'success', 'message': 'Subscription saved.'})
-
     except Exception as e:
         print(f"Error saving WebPushDevice: {e}")
-        traceback.print_exc() # Print full traceback for debugging
+        traceback.print_exc()
         return JsonResponse({'status': 'error', 'message': 'Server error saving subscription.'}, status=500)

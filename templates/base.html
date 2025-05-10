@@ -1,4 +1,5 @@
 {% load static %}
+{% load markup_filters %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -78,6 +79,14 @@
     </header>
 
     <main class='container mt-4 mb-4'>
+        {# --- NEW: Site Announcement Display --- #}
+        {% if request.site_announcement_to_display %}
+        <div class="alert alert-info alert-dismissible fade show" role="alert">
+             {{ request.site_announcement_to_display.message|markdown_to_html }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endif %}
+
         {% block content %}
             <p>This is default content from base.html.</p>
         {% endblock %}

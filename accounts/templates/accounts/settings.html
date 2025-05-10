@@ -22,8 +22,13 @@
 <h3>Subscription Status</h3>
 <p>You are currently on the <strong>{% if is_subscriber %}Premium{% else %}Free{% endif %}</strong> tier.</p>
 <p>(Allows saving up to {{ max_locations }} location{{ max_locations|pluralize }}.)</p>
-{% if not is_subscriber %}
-<p><a href="{% url 'subscriptions:plan_selection' %}">Upgrade to Premium?</a></p>
+{% if is_subscriber %}
+    {# Ensure request.user.subscription exists and has a stripe_customer_id #}
+    {% if request.user.subscription and request.user.subscription.stripe_customer_id %}
+        <p><a href="{% url 'subscriptions:customer_portal_session' %}" class="btn btn-info mt-2">Manage Subscription & Billing</a></p>
+    {% endif %}
+{% else %}
+    <p><a href="{% url 'subscriptions:plan_selection' %}">Upgrade to Premium?</a></p>
 {% endif %}
 
 <hr>

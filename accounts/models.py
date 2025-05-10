@@ -4,6 +4,10 @@ from django.conf import settings
 
 class Profile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+
+    seen_announcement_identifiers = models.JSONField(default=list, blank=True, help_text="List of unique identifiers of announcements seen by the user.")
+
+
     def __str__(self):
         return f"{self.user.username}'s Profile"
 

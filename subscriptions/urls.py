@@ -7,7 +7,8 @@ from .views import (
     SubscriptionSuccessView, # Should match class name in views.py
     SubscriptionCancelView,  # Should match class name in views.py
     stripe_webhook_view,
-    save_push_subscription_view
+    save_push_subscription_view,
+    create_customer_portal_session_view
 )
 
 app_name = 'subscriptions' # Define namespace
@@ -22,4 +23,5 @@ urlpatterns = [
     path('checkout/cancel/', SubscriptionCancelView.as_view(), name='cancel'),
     path('webhook/', stripe_webhook_view, name='stripe_webhook'),
     path('save-push-subscription/', save_push_subscription_view, name='save_push_subscription'),
+    path('manage-subscription/', create_customer_portal_session_view, name='customer_portal_session')
 ]
