@@ -48,6 +48,10 @@
              <li class="nav-item">
                 <a class="nav-link" href="{% url 'weather:premium_radar' %}">Premium Radar</a>
              </li>
+             <li class="nav-item"> {# <-- ADD THIS NEW LIST ITEM --> #}
+                <a class="nav-link" href="{% url 'weather:weather_models' %}">Weather Models</a>
+             </li>
+             
              {% endif %}
           </ul>
 

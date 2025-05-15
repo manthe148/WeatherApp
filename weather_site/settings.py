@@ -17,6 +17,10 @@ from dotenv import load_dotenv
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media') # Or BASE_DIR / 'media' if using pathlib
+
+
 # Load .env file variables
 load_dotenv(os.path.join(BASE_DIR, '.env')) # Explicitly point to .env file
 
@@ -92,6 +96,7 @@ INSTALLED_APPS = [
     'subscriptions',
     'push_notifications',
     'django_q',
+    'pygrib',
 ]
 
 MIDDLEWARE = [
@@ -204,3 +209,7 @@ LOGIN_REDIRECT_URL = '/'  # Redirect to homepage (root URL) after successful log
 LOGOUT_REDIRECT_URL = '/' # Redirect to homepage after logout
 
 
+# Site-wide default location (e.g., Adair, OK)
+SITE_DEFAULT_LATITUDE = 36.44
+SITE_DEFAULT_LONGITUDE = -95.28
+SITE_DEFAULT_NAME = "Adair, OK (Site Default)"

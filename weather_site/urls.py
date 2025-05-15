@@ -19,6 +19,11 @@ from django.urls import path, include
 from accounts import views as accounts_views # Import accounts views
 from accounts.views import ServiceWorkerView
 from django.views.generic import TemplateView
+from django.conf import settings # Add this
+from django.conf.urls.static import static # Add this
+
+
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -31,3 +36,6 @@ urlpatterns = [
     path('sw.js', ServiceWorkerView.as_view(), name='service_worker'),
     path('offline/', TemplateView.as_view(template_name="offline.html"), name='offline_page'),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

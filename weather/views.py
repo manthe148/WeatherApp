@@ -1,3 +1,4 @@
+import os, json
 from django.shortcuts import render
 from django.conf import settings
 import requests
@@ -7,10 +8,122 @@ from decimal import Decimal, InvalidOperation
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from subscriptions.tasks import get_nws_zone_for_coords, fetch_alerts_by_zone_or_point
+from datetime import datetime, timedelta, timezone
+from django.http import JsonResponse
+from django.urls import reverse
 
 # Import Profile model if needed (likely not directly needed here if accessing via user)
 # from accounts.models import Profile
 
+def get_gfs_run_details_and_filename(forecast_hour_str_req):
+    """
+    Helper to determine latest GFS run and construct filename for a given forecast hour.
+    Returns (run_date_str, model_run_hour_str, forecast_hour_str_validated, filename, full_fs_path, image_url_path)
+    """
+    now_utc = datetime.now(timezone.utc)
+    target_time_for_run = now_utc - timedelta(hours=7) # Approx. 7-hour offset
+    run_date_str = target_time_for_run.strftime("%Y%m%d")
+    hour_val = target_time_for_run.hour
+    model_run_hour_str = ""
+    if hour_val >= 18: model_run_hour_str = "18"
+    elif hour_val >= 12: model_run_hour_str = "12"
+    elif hour_val >= 6: model_run_hour_str = "06"
+    else: model_run_hour_str = "00"
+
+    forecast_hour_str_validated = "006" # Default
+    try:
+        fhr_int = int(forecast_hour_str_req)
+        if not (0 <= fhr_int <= 384):
+            raise ValueError("Forecast hour out of typical GFS range.")
+        forecast_hour_str_validated = f"{fhr_int:03d}"
+    except ValueError:
+        # Keep default if invalid input
+        pass
+
+    filename = f"gfs_t2m_{run_date_str}_{model_run_hour_str}z_f{forecast_hour_str_validated}.png"
+    image_media_path = os.path.join('model_plots', filename)
+    full_fs_path = os.path.join(settings.MEDIA_ROOT, image_media_path)
+    image_url = os.path.join(settings.MEDIA_URL, image_media_path) # Use os.path.join for URL too
+                                                                # but MEDIA_URL usually ends with /
+    image_url = settings.MEDIA_URL + image_media_path # Simpler for URL
+
+    return run_date_str, model_run_hour_str, forecast_hour_str_validated, filename, full_fs_path, image_url
+
+
+@login_required # Keep access control
+def get_model_image_info(request):
+    if not (hasattr(request.user, 'subscription') and request.user.subscription.is_active()):
+        return JsonResponse({'error': 'Subscription required'}, status=403)
+
+    requested_fhr = request.GET.get('fhr', '006').strip()
+
+    run_date_str, model_run_hour_str, fhr_validated, _, full_fs_path, image_url = \
+        get_gfs_run_details_and_filename(requested_fhr)
+
+    image_exists = os.path.exists(full_fs_path)
+    page_title = f"GFS 2m Temp - F{fhr_validated} (Run: {run_date_str} {model_run_hour_str}Z)"
+    status_message = ""
+
+    if image_exists:
+        status_message = f"Showing {page_title}"
+    else:
+        status_message = f"{page_title} is not yet available. Please ensure it has been generated."
+        # No image_url if it doesn't exist
+        image_url = None 
+
+    data = {
+        'image_exists': image_exists,
+        'image_url': image_url,
+        'status_message': status_message,
+        'page_title': page_title, # To update the heading
+        'current_fhr': fhr_validated
+    }
+    return JsonResponse(data)
+
+
+@login_required
+def weather_models_view(request):
+    is_subscriber = False
+    profile = None
+    try:
+        profile = request.user.profile
+        if hasattr(request.user, 'subscription') and request.user.subscription.is_active():
+            is_subscriber = True
+    except Exception as e:
+        print(f"Error checking subscription/profile for {request.user.username} in weather_models_view: {e}")
+
+    if not is_subscriber:
+        messages.warning(request, "Access to Weather Models requires an active subscription.")
+        return redirect('subscriptions:plan_selection')
+
+    # Initial forecast hour to display
+    initial_fhr = "006" 
+
+    # Get initial image info using the helper (though JS will fetch it on load too)
+    run_date_str, model_run_hour_str, fhr_validated, _, full_fs_path, image_url = \
+        get_gfs_run_details_and_filename(initial_fhr)
+
+    image_exists = os.path.exists(full_fs_path)
+    page_title = f"GFS 2m Temp - F{fhr_validated} (Run: {run_date_str} {model_run_hour_str}Z)"
+    status_message = ""
+    if image_exists:
+        status_message = f"Showing {page_title}"
+    else:
+        status_message = f"{page_title} is not yet available. Please ensure it has been generated."
+        image_url = None # Don't pass a URL if it doesn't exist
+
+    available_fhrs = ["000", "006", "012", "018", "024", "036", "048", "072", "096", "120"]
+
+    context = {
+        'page_title_initial': page_title, # Initial title
+        'model_image_url_initial': image_url,
+        'image_exists_initial': image_exists,
+        'status_message_initial': status_message,
+        'current_fhr_initial': fhr_validated,
+        'available_fhrs': available_fhrs,
+        'api_url_model_image_info': reverse('weather:api_model_image_info') # URL for JS to call
+    }
+    return render(request, 'weather/weather_models.html', context)
 def get_weather_alerts(request):
     site_default_lat = Decimal("36.44")
     site_default_lon = Decimal("-95.28")
