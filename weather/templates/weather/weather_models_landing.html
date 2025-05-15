@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ page_title|default:"Select Weather Model" }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>{{ page_title|default:"Select Weather Model" }}</h2>
+    <p>Choose a weather model and parameters to view forecast products.</p>
+
+    <div class="list-group mt-4">
+        <a href="{% url 'weather:gfs_temperature_model_view' %}" class="list-group-item list-group-item-action">
+            <h5 class="mb-1">Global Forecast System (GFS)</h5>
+            <p class="mb-1">View 2m Temperature forecasts.</p>
+            <small>Covers global area, updated 4 times daily.</small>
+        </a>
+        {# Add more links as you implement other models/parameters #}
+        <a href="#" class="list-group-item list-group-item-action disabled" tabindex="-1" aria-disabled="true">
+            <h5 class="mb-1">NAM (North American Mesoscale) <span class="badge bg-secondary">Coming Soon</span></h5>
+            <p class="mb-1">Higher resolution forecasts for North America.</p>
+        </a>
+        <a href="#" class="list-group-item list-group-item-action disabled" tabindex="-1" aria-disabled="true">
+            <h5 class="mb-1">HRRR (High-Resolution Rapid Refresh) <span class="badge bg-secondary">Coming Soon</span></h5>
+            <p class="mb-1">Very high-resolution short-range forecasts for the US.</p>
+        </a>
+    </div>
+</div>
+{% endblock %}

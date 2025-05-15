@@ -164,13 +164,13 @@ AUTH_PASSWORD_VALIDATORS = [
 Q_CLUSTER = {
     'name': 'DjangORM',      # A name for this cluster configuration
     'workers': 2,           # Number of worker processes to run (2-4 is a good start)
-    'timeout': 90,          # Task timeout in seconds before it's considered failed
-    'retry': 120,           # How long to wait to retry a failed task (seconds). Must be > timeout.
+    'timeout': 600,          # Task timeout in seconds before it's considered failed
+    'retry': 720,           # How long to wait to retry a failed task (seconds). Must be > timeout.
     'queue_limit': 50,      # Max number of tasks to fetch from DB at once per worker
     'bulk': 10,             # How many tasks a worker will try to process in a batch
     'orm': 'default',       # Crucial: Tells Django Q to use the default Django database
     # Optional:
-    # 'catch_up': True,     # If the cluster was down, process tasks that were scheduled during downtime
+     'catch_up': True,     # If the cluster was down, process tasks that were scheduled during downtime
     # 'sync': False,        # IMPORTANT: Keep False for asynchronous operation. True is for testing ONLY.
 }
 

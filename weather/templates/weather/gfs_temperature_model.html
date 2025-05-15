@@ -37,7 +37,7 @@
 {% block extra_js %}
 <script>
     const initialFHR = "{{ current_fhr_initial|default:'006' }}";
-    const apiUrlModelImageInfo = "{% url 'weather:api_model_image_info' %}"; // Get API URL from Django
+    const apiUrlModelImageInfo = "{% url 'weather:api_gfs_temperature_image_info' %}";
 </script>
-<script src="{% static 'weather/js/weather_models_dynamic.js' %}" defer></script> {# New JS file #}
+<script src="{% static 'weather/js/gfs_temperature_dynamic.js' %}" defer></script>
 {% endblock %}

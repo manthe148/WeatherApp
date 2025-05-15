@@ -8,9 +8,9 @@ urlpatterns = [
     # call the get_weather_alerts view function.
     # Name this pattern 'alert_list' for potential use with {% url %} later.
     path('', views.get_weather_alerts, name='weather_page'),
-    # Add other weather-related URLs here later (e.g., radar, forecast)
     path('radar/premium/', views.premium_radar_view, name='premium_radar'),
-    path('models/', views.weather_models_view, name='weather_models'),
-    path('api/model-image-info/', views.get_model_image_info, name='api_model_image_info'),
-
+    path('models/', views.weather_models_landing_view, name='weather_models_landing'),
+    path('api/gfs-temperature-image-info/', views.get_gfs_temperature_image_info, name='api_gfs_temperature_image_info'),
+    path('models/gfs-temperature/', views.gfs_temperature_model_view, name='gfs_temperature_model_view'), # Renamed
+    # New landing page for models
 ]

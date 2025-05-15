@@ -83,3 +83,10 @@ venv.bak/
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Ignore temporary GRIB files in the project root
+gfs_temp_data_*.grb2
+*.grb2 
+
+# Keep your existing ignores
+media/model_plots/
