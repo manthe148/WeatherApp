@@ -1,149 +1,40 @@
-# weather/management/commands/generate_model_plot.
-import requests
-import os
-import pygrib
-import traceback
-import numpy as np
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import cartopy.crs as ccrs
-import cartopy.feature as cfeature
-from datetime import datetime, timedelta, timezone # Ensure timedelta is imported
-
+# weather/management/commands/generate_model_plot.py
 from django.core.management.base import BaseCommand
-from django.conf import settings
+from weather.grib_processing import get_latest_gfs_rundate_and_hour, generate_gfs_plot_for_hour # IMPORT NEW FUNCTIONS
 
 class Command(BaseCommand):
-    help = 'Generates a weather model plot (e.g., GFS 2m Temperature) and saves it as an image.'
+    help = 'Generates a GFS model plot for a specified forecast hour.'
 
     def add_arguments(self, parser):
-        # Add an optional argument for forecast hour, defaulting to '006'
         parser.add_argument(
-            '--fhr',
-            type=str,
-            default='006',
+            '--fhr', type=str, default='006',
             help='Forecast hour string (e.g., "006", "012", "024"). Must be 3 digits.'
         )
-        # Optional: Add argument for parameter if you want to make it more flexible later
-        # parser.add_argument('--param', type=str, default='2t', help='Parameter short name (e.g., "2t" for 2m temp)')
-
-    def get_latest_available_gfs_rundate_and_hour(self):
-        """Determines a recent GFS run date and hour string that is likely available."""
-        now_utc = datetime.now(timezone.utc)
-        # Go back about 6-7 hours to increase likelihood of data availability
-        target_time_for_run = now_utc - timedelta(hours=7) # Increased offset slightly for more reliability
-
-        run_date_str = target_time_for_run.strftime("%Y%m%d")
-        hour_val = target_time_for_run.hour
-
-        if hour_val >= 18:
-            run_hour_str = "18"
-        elif hour_val >= 12:
-            run_hour_str = "12"
-        elif hour_val >= 6:
-            run_hour_str = "06"
-        else:
-            run_hour_str = "00"
-
-        self.stdout.write(f"Current UTC: {now_utc.strftime('%Y-%m-%d %H:%M:%SZ')}")
-        self.stdout.write(f"Timepoint for selecting run (approx 7hrs ago): {target_time_for_run.strftime('%Y-%m-%d %H:%M:%SZ')}")
-        self.stdout.write(f"Targeting GFS run: Date={run_date_str}, Hour={run_hour_str}Z")
-        return run_date_str, run_hour_str
 
     def handle(self, *args, **options):
-        self.stdout.write("Starting model plot generation...")
+        self.stdout.write(self.style.NOTICE("Manually generating single GFS model plot..."))
 
-        run_date_str, model_run_hour_str = self.get_latest_available_gfs_rundate_and_hour()
-       
-        # --- Get forecast_hour_str from command options ---
+        run_date_str, model_run_hour_str = get_latest_gfs_rundate_and_hour(self.stdout.write)
         forecast_hour_str = options['fhr']
-        # Basic validation/formatting for forecast hour string (e.g., ensure 3 digits, zero-padded)
+
+        # Ensure forecast_hour_str is 3 digits
         try:
             fhr_int = int(forecast_hour_str)
-            if not (0 <= fhr_int <= 384): # GFS forecast hours range
-                raise ValueError("Forecast hour out of typical GFS range.")
-            forecast_hour_str = f"{fhr_int:03d}" # Ensure 3 digits, e.g., 6 -> 006
+            forecast_hour_str = f"{fhr_int:03d}"
         except ValueError:
-            self.stderr.write(self.style.ERROR(f"Invalid forecast hour: '{options['fhr']}'. Must be an integer for GFS (e.g., 6, 12, 24). Using default '006'."))
+            self.stderr.write(self.style.ERROR(f"Invalid forecast hour: '{options['fhr']}'. Using '006'."))
             forecast_hour_str = "006"
-        # --- End forecast_hour_str logic ---
 
-        parameter_name_grib = "2 metre temperature"
+        self.stdout.write(f"Attempting to generate plot for Run: {run_date_str} {model_run_hour_str}Z, Forecast: F{forecast_hour_str}")
 
-        gfs_url = f"https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod/gfs.{run_date_str}/{model_run_hour_str}/atmos/gfs.t{model_run_hour_str}z.pgrb2.0p25.f{forecast_hour_str}"
+        success, image_path = generate_gfs_plot_for_hour(
+            run_date_str,
+            model_run_hour_str,
+            forecast_hour_str,
+            self.stdout.write # Pass the command's output function
+        )
 
-        grib_filename = "gfs_temp_data.grb2"
-        output_image_name = f"gfs_t2m_{run_date_str}_{model_run_hour_str}z_f{forecast_hour_str}.png"
-        output_image_path = os.path.join(settings.MEDIA_ROOT, 'model_plots', output_image_name)
-        os.makedirs(os.path.dirname(output_image_path), exist_ok=True)
-
-        self.stdout.write(f"Attempting to download GRIB2 file from: {gfs_url}")
-        try:
-            response = requests.get(gfs_url, stream=True, timeout=120)
-            response.raise_for_status() # Will raise an exception for 4xx/5xx errors
-            with open(grib_filename, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
-            self.stdout.write(f"Downloaded to {grib_filename}")
-        except requests.exceptions.RequestException as e:
-            self.stderr.write(self.style.ERROR(f"Error downloading GRIB file: {e} (URL: {gfs_url})"))
-            if os.path.exists(grib_filename): # Clean up partial download
-                os.remove(grib_filename)
-            return # Stop execution if download fails
-        except Exception as e:
-            self.stderr.write(self.style.ERROR(f"An unexpected error during download: {e}"))
-            if os.path.exists(grib_filename):
-                os.remove(grib_filename)
-            return
-
-        # --- Processing GRIB2 file using pygrib ---
-        # (Keep the rest of your pygrib processing and matplotlib plotting logic as is)
-        try:
-            self.stdout.write(f"Processing GRIB file: {grib_filename}")
-            grbs = pygrib.open(grib_filename)
-
-            temp_grib_message = None
-            for grb_msg in grbs:
-                if parameter_name_grib.lower() in grb_msg.name.lower() and grb_msg.level == 2 and grb_msg.typeOfLevel == 'heightAboveGround':
-                    temp_grib_message = grb_msg
-                    break
-
-            if not temp_grib_message:
-                self.stderr.write(self.style.ERROR(f"Could not find '{parameter_name_grib}' at 2m in GRIB file."))
-                grbs.close()
-                os.remove(grib_filename)
-                return
-
-            data_values = temp_grib_message.values
-            lats, lons = temp_grib_message.latlons()
-            data_values_f = (data_values - 273.15) * 9/5 + 32
-            grbs.close()
-            self.stdout.write("GRIB data processed.")
-
-            # --- Create Plot ---
-            self.stdout.write("Generating plot...")
-            fig = plt.figure(figsize=(12, 9))
-            ax = plt.axes(projection=ccrs.PlateCarree())
-            ax.set_extent([-125, -65, 23, 50], crs=ccrs.PlateCarree()) # CONUS extent
-            ax.add_feature(cfeature.COASTLINE)
-            ax.add_feature(cfeature.BORDERS, linestyle=':')
-            ax.add_feature(cfeature.STATES, linestyle=':')
-            levels = np.arange(0, 105, 5)
-            contour = plt.contourf(lons, lats, data_values_f, levels=levels,
-                                   transform=ccrs.PlateCarree(), cmap='jet', extend='both')
-            plt.colorbar(contour, ax=ax, orientation='horizontal', label='Temperature (°F)', pad=0.05, shrink=0.7)
-            ax.set_title(f'GFS 2m Temperature Forecast (°F)\nRun: {run_date_str} {model_run_hour_str}Z - Forecast Hour: F{forecast_hour_str}')
-            plt.savefig(output_image_path, bbox_inches='tight', pad_inches=0)
-            plt.close(fig)
-            self.stdout.write(self.style.SUCCESS(f"Plot saved to {output_image_path}"))
-            self.stdout.write(f"Image focuses on CONUS: Approx [-125 to -65 lon, 23 to 50 lat]")
-
-        except ImportError:
-            self.stderr.write(self.style.ERROR("A required library (pygrib, matplotlib, or cartopy) is not installed or 'Agg' backend failed."))
-        except Exception as e:
-            self.stderr.write(self.style.ERROR(f"Error during GRIB processing or plotting: {e}"))
-            traceback.print_exc()
-        finally:
-            if os.path.exists(grib_filename): # Ensure cleanup of downloaded GRIB
-                os.remove(grib_filename)
+        if success:
+            self.stdout.write(self.style.SUCCESS(f"Successfully generated plot: {image_path}"))
+        else:
+            self.stdout.write(self.style.ERROR("Failed to generate plot. Check logs above."))

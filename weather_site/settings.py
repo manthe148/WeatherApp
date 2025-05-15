@@ -90,7 +90,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'pages',
-    'weather',
+    'weather.apps.WeatherConfig',
     'accounts',
     'django_extensions',
     'subscriptions',

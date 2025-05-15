@@ -22,12 +22,14 @@ class SubscriptionsConfig(AppConfig):
             # Try to get the existing schedule
             schedule_obj = Schedule.objects.get(name=schedule_name)
             # Check if the interval needs updating
-            if schedule_obj.minutes != desired_interval_minutes or schedule_obj.schedule_type != Schedule.MINUTES:
-                schedule_obj.minutes = desired_interval_minutes
-                schedule_obj.schedule_type = Schedule.MINUTES
-                schedule_obj.repeats = -1 # Ensure it repeats indefinitely
-                schedule_obj.next_run = timezone.now() + timedelta(minutes=desired_interval_minutes) # Schedule next run
-                schedule_obj.save()
+            if (schedule_obj.minutes != desired_interval_minutes or 
+                schedule_obj.schedule_type != Schedule.MINUTES or # Should be Schedule.MINUTES
+                schedule_obj.func != task_path):
+
+                schedule_obj.func = task_path
+                schedule_obj.minutes = desired_interval_minutes # Use 'minutes' parameter
+                schedule_obj.hours = None # Explicitly set hours to None
+                schedule_obj.schedule_type = Schedule.MINUTES # Correct for minutes
                 print(f"UPDATED task '{schedule_name}' to run every {desired_interval_minutes} minute(s).")
             else:
                 print(f"Task '{schedule_name}' already scheduled correctly for every {desired_interval_minutes} minute(s).")
