@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}<span id="page-title-display">{{ page_title_initial|default:"GFS Weather Models" }}</span>{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-3" id="model-main-heading">{{ page_title_initial|default:"GFS Weather Models" }}</h2>
+    
+    {% comment %} Display Django messages if any (e.g., from view redirects) {% endcomment %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{% if message.tags %}{{ message.tags }}{% else %}info{% endif %} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <p id="model-status-message">{{ status_message_initial|default:"Select parameters and forecast hour." }}</p>
+
+    <div class="row">
+        <div class="col-md-12 mb-3">
+            <strong>Parameter:</strong>
+            {% for param_opt in available_parameters %}
+                <button type="button" 
+                   class="btn btn-sm {% if param_opt.code == current_param_code_initial %}btn-success active{% else %}btn-outline-success{% endif %} me-1 mb-1 model-param-btn"
+                   data-param-code="{{ param_opt.code }}">
+                    {{ param_opt.name }}
+                </button>
+            {% endfor %}
+        </div>
+        <div class="col-md-12 mb-3">
+            <strong>Forecast Hour:</strong>
+            {% for fhr_option in available_fhrs %}
+                <button type="button" 
+                   class="btn btn-sm {% if fhr_option == current_fhr_initial %}btn-primary active{% else %}btn-outline-primary{% endif %} me-1 mb-1 forecast-hour-btn"
+                   data-fhr="{{ fhr_option }}">
+                    F{{ fhr_option }}
+                </button>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="text-center mt-4 model-image-container">
+        <img id="model-plot-image" 
+             src="{{ model_image_url_initial|default:'' }}" 
+             alt="GFS Model Plot" 
+             class="img-fluid border shadow-sm" 
+             style="display: {% if image_exists_initial and model_image_url_initial %}block{% else %}none{% endif %};">
+        <div id="no-image-message" class="alert alert-warning mt-4" role="alert" 
+             style="display: {% if image_exists_initial and model_image_url_initial %}none{% else %}block{% endif %};">
+            {% if image_exists_initial and model_image_url_initial %}
+                {{ status_message_initial }}
+            {% else %}
+                The weather model image is currently not available for the selected criteria. It might need to be generated.
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const initialFHR = "{{ current_fhr_initial|default:'006' }}";
+    const initialParamCode = "{{ current_param_code_initial|default:'t2m' }}";
+    const jsApiUrl = "{{ api_url_for_js }}"; // This comes from the view's context
+</script>
+<script src="{% static 'weather/js/weather_models.js' %}" defer></script>
+{% endblock %}

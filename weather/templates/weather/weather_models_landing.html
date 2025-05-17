@@ -9,9 +9,9 @@
     <p>Choose a weather model and parameters to view forecast products.</p>
 
     <div class="list-group mt-4">
-        <a href="{% url 'weather:gfs_temperature_model_view' %}" class="list-group-item list-group-item-action">
+        <a href="{% url 'weather:gfs_model_page' %}" class="list-group-item list-group-item-action">
             <h5 class="mb-1">Global Forecast System (GFS)</h5>
-            <p class="mb-1">View 2m Temperature forecasts.</p>
+            <p class="mb-1">View 2m Temperature, Surface CAPE, etc.</p> {# Updated description #}
             <small>Covers global area, updated 4 times daily.</small>
         </a>
         {# Add more links as you implement other models/parameters #}

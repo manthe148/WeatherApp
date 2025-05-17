@@ -5,12 +5,11 @@ except ImportError:
     print("WARNING: NumPy not imported in tasks.py, but grib_processing might need it for plot_levels.")
     np = None # Fallback, though grib_processing defines its own levels
 
-from weather.grib_processing import get_latest_gfs_rundate_and_hour, generate_gfs_plot_for_hour
+from weather.grib_processing import get_latest_gfs_rundate_and_hour, generate_gfs_parameter_plot
 from django_q.tasks import schedule, Schedule # For potential re-scheduling or checking
 from datetime import datetime, timezone, timedelta
 import os
 from django.conf import settings
-
 
 def automated_gfs_plot_generation(*args, **kwargs): # Added *args, **kwargs
     print(f"[{datetime.now(timezone.utc).isoformat()}] Task: automated_gfs_plot_generation starting...")
@@ -24,7 +23,7 @@ def automated_gfs_plot_generation(*args, **kwargs): # Added *args, **kwargs
         {
             'grib_short_name': '2t', 'grib_level': 2, 'grib_type_of_level': 'heightAboveGround',
             'output_file_prefix': 'gfs_t2m', 'plot_title_param_name': '2m Temperature',
-            'plot_unit_label': 'Temperature (°F)', 'plot_cmap': 'jet',
+            'plot_unit_label': 'Temperature (deg F)', 'plot_cmap': 'jet',
             'plot_levels': np.arange(0, 105, 5) if np else None, # Use np if available
             'needs_conversion_to_F': True
         },
@@ -35,13 +34,19 @@ def automated_gfs_plot_generation(*args, **kwargs): # Added *args, **kwargs
             'plot_levels': np.arange(0, 5001, 250) if np else None, # Levels for CAPE
             'needs_conversion_to_F': False
         },
-        # Future: Add Composite Reflectivity details here
-        # {
-        #    'grib_short_name': 'refc', 'grib_level': 0, 'grib_type_of_level': 'entireAtmosphereConsideredAsASingleLayer',
-        #    'output_file_prefix': 'gfs_refc', 'plot_title_param_name': 'Simulated Composite Reflectivity',
-        #    'plot_unit_label': 'Reflectivity (dBZ)', 'plot_cmap': 'gist_ncar_r', 
-        #    'plot_levels': np.arange(5, 76, 5), 'needs_conversion_to_F': False
-        # }
+        { # --- ADD OR VERIFY THIS ENTRY FOR COMPOSITE REFLECTIVITY ---
+           'grib_short_name': 'refc', 
+           'grib_level': 0, 
+           'grib_type_of_level': 'atmosphere', # Was 'entireAtmosphereConsideredAsASingleLayer'
+           'output_file_prefix': 'gfs_refc', 
+           'plot_title_param_name': 'Sim. Comp. Reflectivity',
+           'plot_unit_label': 'Reflectivity (dBZ)', 
+           'plot_cmap': 'gist_ncar_r', # Or 'turbo'
+           'plot_levels': list(range(5, 76, 5)) if np is None else np.arange(5, 76, 5),
+           'needs_conversion_to_F': False
+       }
+    # --- END REFLECTIVITY ENTRY ---
+
     ]
     # --- END PARAMETER DEFINITIONS ---
 

@@ -1,12 +1,21 @@
-// weather/static/weather/js/weather_models.js
+// weather/static/weather/js/gfs_temperature_page.js 
+// (or weather_models_dynamic.js, whatever your HTML template links to)
+
 document.addEventListener('DOMContentLoaded', function () {
-    console.log("Weather Models JS Initializing...");
+    console.log("Dynamic GFS Page JS Loaded (for multi-parameter).");
     
-    // Check if global constants from inline script are defined
-    if (typeof jsApiUrl === 'undefined' || jsApiUrl === '') { 
-        console.error("JS Error: jsApiUrl is UNDEFINED or EMPTY. Check your HTML template's inline script and the view context that provides 'api_url_for_js'."); 
+    // These global consts are expected to be defined by an inline script in your HTML template
+    // At the top of DOMContentLoaded:
+    if (typeof GFS_API_URL === 'undefined' || !GFS_API_URL) { 
+        console.error("JS Var: GFS_API_URL is UNDEFINED or EMPTY. Check HTML template's inline script and view context."); 
         return; 
     }
+    console.log("JS Init: GFS_API_URL =", GFS_API_URL);
+
+    // Inside fetchModelPlot:
+    if (typeof GFS_API_URL !== 'string' || !GFS_API_URL || /* other checks */ ) { /* error */ }
+    const urlToFetch = `<span class="math-inline">\{GFS\_API\_URL\}?fhr\=</span>{fhr}&param=${paramCode}`;
+
     if (typeof initialFHR === 'undefined') { 
         console.error("JS Error: initialFHR is UNDEFINED. Check your HTML template's inline script."); 
         return; 
@@ -22,7 +31,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const imageElement = document.getElementById('model-plot-image');
     const statusMessageElement = document.getElementById('model-status-message');
-    const modelMainHeadingElement = document.getElementById('model-main-heading');
+    const modelMainHeadingElement = document.getElementById('model-main-heading'); // For the H2 title on the page
     const noImageMessageElement = document.getElementById('no-image-message');
     
     const forecastButtons = document.querySelectorAll('.forecast-hour-btn');
@@ -55,22 +64,28 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function fetchModelPlot(fhr, paramCode) { 
         console.log(`--- fetchModelPlot called with Param: ${paramCode}, FHR: ${fhr} ---`);
+        // --- ADD THESE LOGS ---
+        console.log(`Inside fetchModelPlot - Received FHR: '${fhr}', Type: ${typeof fhr}`);
+        console.log(`Inside fetchModelPlot - Received ParamCode: '${paramCode}', Type: ${typeof paramCode}`);
+        console.log(`Inside fetchModelPlot - Checking API URL variable (e.g., jsApiUrl): '${typeof jsApiUrl !== 'undefined' ? jsApiUrl : "NOT DEFINED OR WRONG NAME"}'`);
+        // --- END ADDED LOGS ---
+
 
         if (!imageElement || !statusMessageElement || !modelMainHeadingElement || !noImageMessageElement) {
-            console.error("JS Error: One or more critical display elements are missing from the DOM."); 
+            console.error("JS Error: One or more critical display elements (image, status, heading, no-image message) are missing from the DOM."); 
             return; 
         }
         if (typeof jsApiUrl !== 'string' || !jsApiUrl || 
             typeof fhr !== 'string' || !fhr || 
             typeof paramCode !== 'string' || !paramCode) {
             console.error("JS Error: Missing or invalid API URL, FHR, or ParamCode for fetch call.");
-            if(statusMessageElement) statusMessageElement.textContent = 'Error: Internal configuration error.';
+            if(statusMessageElement) statusMessageElement.textContent = 'Error: Internal configuration or parameter selection error.';
             return;
         }
 
-        if(statusMessageElement) statusMessageElement.textContent = `Loading F${fhr} for ${paramCode.toUpperCase()}...`;
-        if(imageElement) imageElement.style.display = 'none'; // Hide current image while loading new one
-        if(noImageMessageElement) noImageMessageElement.style.display = 'none';
+        if(statusMessageElement) statusMessageElement.textContent = `Loading F${fhr} for ${paramCode.toUpperCase()} parameter...`;
+        if(imageElement) imageElement.style.display = 'none'; // Hide current image
+        if(noImageMessageElement) noImageMessageElement.style.display = 'none'; // Hide no-image message
 
         const urlToFetch = `${jsApiUrl}?fhr=${fhr}&param=${paramCode}`;
         console.log("Constructed URL for fetch:", urlToFetch);
@@ -79,16 +94,15 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(response => {
                 console.log("Fetch response received. Status:", response.status);
                 if (!response.ok) { 
-                    // Try to get text from error response to show more details
-                    return response.text().then(text => {
-                       throw new Error(`Network error ${response.status}: ${response.statusText}. Server detail: ${text.substring(0, 200)}`);
+                    return response.text().then(text => { // Try to get text body from error response
+                       throw new Error(`Network error: ${response.status} ${response.statusText} - Server response: ${text.substring(0,200)}`);
                     });
                 }
                 return response.json();
             })
             .then(data => {
                 console.log("API JSON Response:", data);
-                document.title = data.page_title || "GFS Model"; 
+                document.title = data.page_title || "GFS Model"; // Updates browser tab title
                 if (modelMainHeadingElement) modelMainHeadingElement.textContent = data.page_title || "GFS Model";
                 if (statusMessageElement) statusMessageElement.textContent = data.status_message;
 
@@ -107,14 +121,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 currentSelectedFHR = data.current_fhr; 
                 currentSelectedParamCode = data.current_param_code; 
                 updateActiveButtons();
-                try {
-                    // Update browser URL without full reload
+                try { // Update browser URL bar
                     history.pushState(
                         {fhr: currentSelectedFHR, param: currentSelectedParamCode}, 
-                        '', // title - often ignored
-                        // Construct URL relative to current page if base URL is not absolute
-                        // For simplicity assuming current page is /weather/models/
-                        `?param=${currentSelectedParamCode}&fhr=${currentSelectedFHR}`
+                        '', // title - often ignored by browsers
+                        `?param=${currentSelectedParamCode}&fhr=${currentSelectedFHR}` // new URL
                     );
                 } catch (histError) { 
                     console.warn("Could not update browser history (pushState not supported or failed):", histError); 
@@ -123,9 +134,10 @@ document.addEventListener('DOMContentLoaded', function () {
             .catch(error => {
                 console.error('Error fetching or processing model plot:', error);
                 if (statusMessageElement) statusMessageElement.textContent = `Error: ${error.message}`;
+                // Ensure image is hidden and no-image message is shown on error
                 if (imageElement) imageElement.style.display = 'none';
                 if (noImageMessageElement) {
-                    noImageMessageElement.textContent = `Failed to load model image. ${error.message.substring(0,150)}`;
+                    noImageMessageElement.textContent = `Failed to load model image. Please try again or select different options. (${error.message.substring(0,100)})`;
                     noImageMessageElement.style.display = 'block';
                 }
             });
@@ -147,23 +159,25 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
     
-    // Initial setup for active buttons and potentially fetching plot if not pre-rendered by Django
-    const initialImageElement = document.getElementById('model-plot-image');
+    // Initial setup and potential fetch
+    const initialImageElement = document.getElementById('model-plot-image'); // Re-get for safety
     const initialImageSrc = initialImageElement ? initialImageElement.getAttribute('src') : null;
+    // Check if image has a src AND is not hidden by style.display = 'none' by Django template
     const initialImageIsTrulyVisible = initialImageElement && initialImageSrc && initialImageSrc !== '' && initialImageElement.style.display !== 'none';
 
     console.log("Initial image src from template:", initialImageSrc);
-    console.log("Initial image truly visible (has src and not display:none):", initialImageIsTrulyVisible);
+    console.log("Initial image truly visible based on src and display style:", initialImageIsTrulyVisible);
 
     if (initialImageIsTrulyVisible) {
-         console.log("Initial image was rendered by Django template. Highlighting active buttons for Param:", initialParamCode, "FHR:", initialFHR);
+         console.log("Initial image already rendered by Django template. Highlighting active buttons.");
          updateActiveButtons(); 
     } else if (initialParamCode && initialFHR && jsApiUrl) { 
-         // If Django didn't provide an image (e.g., image_exists_initial was false), fetch it.
-         console.log("No initial image visible from Django template, or parameters might have changed from URL. Fetching via JS for Param:", initialParamCode, "FHR:", initialFHR);
+         // If Django didn't provide an image (e.g., image_exists_initial was false), 
+         // or if it was hidden, try to fetch it.
+         console.log("No initial image visible from Django template, or parameters changed. Fetching via JS for Param:", initialParamCode, "FHR:", initialFHR);
          fetchModelPlot(initialFHR, initialParamCode);
     } else {
-        console.warn("Initial param/FHR not fully defined or API URL missing. Skipping initial JS fetch or button highlight. Check inline script in HTML template.");
+        console.warn("Initial param/FHR not fully defined or API URL missing. Skipping initial JS fetch. Check inline script in HTML.");
         if(statusMessageElement && initialImageElement && (!initialImageSrc || initialImageElement.style.display === 'none')) {
              statusMessageElement.textContent = "Select a parameter and forecast hour to load model data.";
         }

@@ -10,141 +10,127 @@ from django.contrib.auth.decorators import login_required
 from subscriptions.tasks import get_nws_zone_for_coords, fetch_alerts_by_zone_or_point
 from datetime import datetime, timedelta, timezone
 from django.http import JsonResponse
-from django.urls import reverse
 from .grib_processing import get_gfs_image_details_with_fallback
+from django.urls import reverse
+
+
 
 
 
 # Import Profile model if needed (likely not directly needed here if accessing via user)
 # from accounts.models import Profile
 
+
+AVAILABLE_GFS_PARAMETERS_CONFIG = {
+    't2m': { # Code used in URL and JS
+        'name_display': '2m Temperature', # For display in buttons/titles
+        'output_file_prefix': 'gfs_t2m',  # Matches prefix used by your task
+    },
+    'sbcape': {
+        'name_display': 'Surface CAPE',
+        'output_file_prefix': 'gfs_sbcape',
+    },
+    # Add 'refc' (Composite Reflectivity) here when its processing is ready
+    'refc': {
+        'name_display': 'Sim. Comp. Reflectivity',
+        'output_file_prefix': 'gfs_refc',
+    }
+}
+
 @login_required
-def weather_models_landing_view(request):
-    # Check subscription status (you can make a helper for this)
+def weather_models_view(request): # THIS IS THE VIEW FOR /weather/models/
     is_subscriber = False
     try:
-        if hasattr(request.user, 'subscription') and request.user.subscription.is_active():
+        if hasattr(request.user, 'subscription') and request.user.subscription and request.user.subscription.is_active():
             is_subscriber = True
-    except Exception:
-        pass # is_subscriber remains False
+    except AttributeError: pass
+    except Subscription.DoesNotExist: pass
+    except Exception as e: print(f"Error checking subscription: {e}")
 
-    if not is_subscriber:
+    if not is_subscriber and not request.user.is_superuser:
         messages.warning(request, "Access to Weather Models requires an active subscription.")
         return redirect('subscriptions:plan_selection')
 
-    context = {
-        'page_title': "Weather Models Selection"
-    }
-    return render(request, 'weather/weather_models_landing.html', context)
+    requested_param_code = request.GET.get('param', 't2m').strip().lower()
+    initial_fhr = request.GET.get('fhr', '006').strip()
 
+    param_config = AVAILABLE_GFS_PARAMETERS_CONFIG.get(requested_param_code)
+    if not param_config: 
+        requested_param_code = 't2m' 
+        param_config = AVAILABLE_GFS_PARAMETERS_CONFIG[requested_param_code]
 
-def get_gfs_run_details_and_filename(forecast_hour_str_req):
-    """
-    Helper to determine latest GFS run and construct filename for a given forecast hour.
-    Returns (run_date_str, model_run_hour_str, forecast_hour_str_validated, filename, full_fs_path, image_url_path)
-    """
-    now_utc = datetime.now(timezone.utc)
-    target_time_for_run = now_utc - timedelta(hours=7) # Approx. 7-hour offset
-    run_date_str = target_time_for_run.strftime("%Y%m%d")
-    hour_val = target_time_for_run.hour
-    model_run_hour_str = ""
-    if hour_val >= 18: model_run_hour_str = "18"
-    elif hour_val >= 12: model_run_hour_str = "12"
-    elif hour_val >= 6: model_run_hour_str = "06"
-    else: model_run_hour_str = "00"
+    try: 
+        fhr_int = int(initial_fhr)
+        initial_fhr = f"{fhr_int:03d}"
+    except ValueError: initial_fhr = "006"
 
-    forecast_hour_str_validated = "006" # Default
-    try:
-        fhr_int = int(forecast_hour_str_req)
-        if not (0 <= fhr_int <= 384):
-            raise ValueError("Forecast hour out of typical GFS range.")
-        forecast_hour_str_validated = f"{fhr_int:03d}"
-    except ValueError:
-        # Keep default if invalid input
-        pass
+    image_info = get_gfs_image_details_with_fallback(
+        initial_fhr, 
+        param_config['output_file_prefix'], 
+        print
+    )
 
-    filename = f"gfs_t2m_{run_date_str}_{model_run_hour_str}z_f{forecast_hour_str_validated}.png"
-    image_media_path = os.path.join('model_plots', filename)
-    full_fs_path = os.path.join(settings.MEDIA_ROOT, image_media_path)
-    image_url = os.path.join(settings.MEDIA_URL, image_media_path) # Use os.path.join for URL too
-                                                                # but MEDIA_URL usually ends with /
-    image_url = settings.MEDIA_URL + image_media_path # Simpler for URL
+    page_title_for_display = f"GFS {param_config['name_display']} - F{image_info['actual_fhr']} (Run: {image_info['actual_run_date']} {image_info['actual_run_hour']}Z)"
+    if not image_info['image_exists']:
+        page_title_for_display = f"GFS {param_config['name_display']}"
 
-    return run_date_str, model_run_hour_str, forecast_hour_str_validated, filename, full_fs_path, image_url
+    available_fhrs_list = [f"{h:03d}" for h in range(0, 121, 6)]
 
-
-@login_required
-def get_gfs_temperature_image_info(request):
-    if not (hasattr(request.user, 'subscription') and request.user.subscription.is_active()):
-        return JsonResponse({'error': 'Subscription required'}, status=403)
-
-    requested_fhr = request.GET.get('fhr', '006').strip()
-
-    # Call the new helper function
-    image_info = get_gfs_image_details_with_fallback(requested_fhr, print) # Using print for server log
-
-    data = {
-        'image_exists': image_info['image_exists'],
-        'image_url': image_info['image_url'],
-        'status_message': image_info['display_message'],
-        'page_title': image_info['display_message'], # Use the display message as page title for consistency
-        'current_fhr': image_info['actual_fhr'] # The FHR of the image being shown (or targeted)
-    }
-    return JsonResponse(data)
-
-@login_required
-def gfs_temperature_model_view(request):
-    is_subscriber = False
-    profile = None
-    try:
-        profile = request.user.profile
-        if hasattr(request.user, 'subscription') and request.user.subscription.is_active():
-            is_subscriber = True
-    except Exception as e:
-        print(f"Error checking subscription/profile for {request.user.username} in weather_models_view: {e}")
-
-    if not is_subscriber:
-        messages.warning(request, "Access to Weather Models requires an active subscription.")
-        return redirect('subscriptions:plan_selection')
-
-    # Initial forecast hour to display
-    initial_fhr = "006" 
-
-    # Get initial image info using the helper (though JS will fetch it on load too)
-    run_date_str, model_run_hour_str, fhr_validated, _, full_fs_path, image_url = \
-        get_gfs_run_details_and_filename(initial_fhr)
-
-    image_exists = os.path.exists(full_fs_path)
-    page_title = f"GFS 2m Temp - F{fhr_validated} (Run: {run_date_str} {model_run_hour_str}Z)"
-    status_message = ""
-    if image_exists:
-        status_message = f"Showing {page_title}"
-    else:
-        status_message = f"{page_title} is not yet available. Please ensure it has been generated."
-        image_url = None # Don't pass a URL if it doesn't exist
-
-    # Get initial image info using the new helper
-    image_info = get_gfs_image_details_with_fallback(initial_fhr, print)
-
-
-    # Define a comprehensive list of forecast hours for navigation links
-    # This matches range(0, 121, 6) formatted to 3 digits
-    available_fhrs = [
-        "000", "006", "012", "018", "024", "030", "036", "042", "048", 
-        "054", "060", "066", "072", "078", "084", "090", "096", 
-        "102", "108", "114", "120"
+    parameter_options_for_template = [
+        {'code': key, 'name': value['name_display']} 
+        for key, value in AVAILABLE_GFS_PARAMETERS_CONFIG.items()
     ]
 
     context = {
-        'page_title_initial': page_title, # Initial title
-        'model_image_url_initial': image_url,
-        'image_exists_initial': image_exists,
-        'status_message_initial': status_message,
-        'current_fhr_initial': fhr_validated,
-        'available_fhrs': available_fhrs,
-        'api_url_model_image_info': reverse('weather:api_gfs_temperature_image_info') # URL for JS to call
+        'page_title_initial': page_title_for_display,
+        'model_image_url_initial': image_info['image_url'],
+        'image_exists_initial': image_info['image_exists'],
+        'status_message_initial': image_info['display_message'],
+        'current_fhr_initial': image_info['actual_fhr'],
+        'current_param_code_initial': requested_param_code, 
+        'available_fhrs': available_fhrs_list,
+        'available_parameters': parameter_options_for_template, 
+        'api_url_for_js': reverse('weather:api_model_image_data') # Uses the name from urls.py
     }
-    return render(request, 'weather/gfs_temperature_model.html', context)
+    return render(request, 'weather/weather_models.html', context) # Template for this page
+
+@login_required
+def get_model_image_api_data(request): # THIS IS THE API VIEW
+    if not (hasattr(request.user, 'subscription') and request.user.subscription and request.user.subscription.is_active()) and not request.user.is_superuser:
+        return JsonResponse({'error': 'Subscription required'}, status=403)
+
+    requested_fhr = request.GET.get('fhr', '006').strip()
+    requested_param_code = request.GET.get('param', 't2m').strip().lower()
+
+    param_config = AVAILABLE_GFS_PARAMETERS_CONFIG.get(requested_param_code)
+    if not param_config:
+        return JsonResponse({
+            'error': 'Invalid parameter', 'image_exists': False,
+            'status_message': f"Unknown parameter code '{requested_param_code}'.",
+            'page_title': "Unknown Parameter", 'current_fhr': requested_fhr,
+            'current_param_code': requested_param_code
+        }, status=400)
+
+    image_info = get_gfs_image_details_with_fallback(
+        requested_fhr, 
+        param_config['output_file_prefix'],
+        print
+    )
+
+    page_title_detail = f"GFS {param_config['name_display']} - F{image_info['actual_fhr']} (Run: {image_info['actual_run_date']} {image_info['actual_run_hour']}Z)"
+    if not image_info['image_exists']: page_title_detail = f"GFS {param_config['name_display']}"
+
+    data_to_return = {
+        'image_exists': image_info['image_exists'],
+        'image_url': image_info['image_url'],
+        'status_message': image_info['display_message'], 
+        'page_title': page_title_detail, 
+        'current_fhr': image_info['actual_fhr'],
+        'current_param_code': requested_param_code 
+    }
+    return JsonResponse(data_to_return)
+
+
 def get_weather_alerts(request):
     site_default_lat = Decimal("36.44")
     site_default_lon = Decimal("-95.28")
@@ -287,6 +273,7 @@ def get_weather_alerts(request):
     print(f"Context: location_name='{context['location_name']}', lat={context['latitude']}, lon={context['longitude']}")
     print(f"-------------------------------------\n")
     return render(request, 'weather/weather.html', context)
+
 
 @login_required
 def premium_radar_view(request):
