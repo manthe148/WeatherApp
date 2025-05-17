@@ -58,6 +58,22 @@
     // Use default values just in case they are missing from context
     const mapCenterLat = {{ latitude|default:36.44 }};
     const mapCenterLon = {{ longitude|default:-95.28 }};
-</script>
+      // This line defines rawNwsAlertFeatures
+        const rawNwsAlertFeatures = JSON.parse('{{ alerts_geojson_json_for_map|escapejs|default:"[]" }}');
 
+        // Add a console log here to check its value immediately after definition
+        console.log("Inline Script - rawNwsAlertFeatures:", typeof rawNwsAlertFeatures !== 'undefined' ? rawNwsAlertFeatures : "UNDEFINED after parse");
+            // Attach init data to the window object
+        window.mapInitData = {
+            lat: {{ latitude|stringformat:".6f"|default:"36.44" }},
+            lon: {{ longitude|stringformat:".6f"|default:"-95.28" }},
+            locationName: "{{ location_name|escapejs|default:'Default Location' }}",
+            alerts: JSON.parse('{{ alerts_geojson_json_for_map|escapejs|default:"[]" }}')
+        };
+        console.log("Inline Script - window.mapInitData set:", window.mapInitData);
+ 
+
+
+</script>
+<script src="{% static '/weather/js/alert_map.js' %}" defer></script>
 {% endblock %}

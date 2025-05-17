@@ -6,23 +6,31 @@
 {% block content %}
 <div class="container mt-4">
     <h2>{{ page_title|default:"Select Weather Model" }}</h2>
-    <p>Choose a weather model and parameters to view forecast products.</p>
+    <p class="lead">Choose a weather model to view detailed forecast products.</p>
 
     <div class="list-group mt-4">
         <a href="{% url 'weather:gfs_model_page' %}" class="list-group-item list-group-item-action">
-            <h5 class="mb-1">Global Forecast System (GFS)</h5>
-            <p class="mb-1">View 2m Temperature, Surface CAPE, etc.</p> {# Updated description #}
-            <small>Covers global area, updated 4 times daily.</small>
+            <div class="d-flex w-100 justify-content-between">
+                <h5 class="mb-1">Global Forecast System (GFS)</h5>
+                <small><i class="fas fa-arrow-right"></i></small>
+            </div>
+            <p class="mb-1">View parameters like 2m Temperature, Surface CAPE, and Simulated Reflectivity.</p>
+            <small>Global coverage, updated 4 times daily. Forecasts out to 16 days.</small>
         </a>
-        {# Add more links as you implement other models/parameters #}
-        <a href="#" class="list-group-item list-group-item-action disabled" tabindex="-1" aria-disabled="true">
-            <h5 class="mb-1">NAM (North American Mesoscale) <span class="badge bg-secondary">Coming Soon</span></h5>
-            <p class="mb-1">Higher resolution forecasts for North America.</p>
-        </a>
-        <a href="#" class="list-group-item list-group-item-action disabled" tabindex="-1" aria-disabled="true">
-            <h5 class="mb-1">HRRR (High-Resolution Rapid Refresh) <span class="badge bg-secondary">Coming Soon</span></h5>
-            <p class="mb-1">Very high-resolution short-range forecasts for the US.</p>
-        </a>
+        <div class="list-group-item list-group-item-action list-group-item-light disabled" tabindex="-1" aria-disabled="true">
+             <div class="d-flex w-100 justify-content-between">
+                <h5 class="mb-1">NAM (North American Mesoscale)</h5>
+                <span class="badge bg-secondary">Coming Soon</span>
+            </div>
+            <p class="mb-1">Higher resolution forecasts focused on North America.</p>
+        </div>
+         <div class="list-group-item list-group-item-action list-group-item-light disabled" tabindex="-1" aria-disabled="true">
+             <div class="d-flex w-100 justify-content-between">
+                <h5 class="mb-1">HRRR (High-Resolution Rapid Refresh)</h5>
+                <span class="badge bg-secondary">Coming Soon</span>
+            </div>
+            <p class="mb-1">Very high-resolution short-range forecasts for the CONUS.</p>
+        </div>
     </div>
 </div>
 {% endblock %}
