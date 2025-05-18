@@ -164,13 +164,13 @@ def weather_models_landing_view(request):
 
 
 @login_required
-def gfs_model_page_view(request): # THIS IS THE VIEW FOR /weather/models/
+def gfs_model_page_view(request):
     is_subscriber = False
     try:
         if hasattr(request.user, 'subscription') and request.user.subscription and request.user.subscription.is_active():
             is_subscriber = True
     except AttributeError: pass
-    except Subscription.DoesNotExist: pass
+    except Subscription.DoesNotExist: pass 
     except Exception as e: print(f"Error checking subscription: {e}")
 
     if not is_subscriber and not request.user.is_superuser:
@@ -178,47 +178,64 @@ def gfs_model_page_view(request): # THIS IS THE VIEW FOR /weather/models/
         return redirect('subscriptions:plan_selection')
 
     requested_param_code = request.GET.get('param', 't2m').strip().lower()
-    initial_fhr = request.GET.get('fhr', '006').strip()
+    # Get the FHR string from GET param, default to "006"
+    initial_fhr_from_request_str = request.GET.get('fhr', '006').strip() 
 
     param_config = AVAILABLE_GFS_PARAMETERS_CONFIG.get(requested_param_code)
     if not param_config: 
         requested_param_code = 't2m' 
         param_config = AVAILABLE_GFS_PARAMETERS_CONFIG[requested_param_code]
 
+    # Validate and format initial_fhr_str for fetching image_info
+    # initial_fhr_for_image_lookup will be the 3-digit string like "006", "012"
+    initial_fhr_for_image_lookup = "006" # Default
     try: 
-        fhr_int = int(initial_fhr)
-        initial_fhr = f"{fhr_int:03d}"
-    except ValueError: initial_fhr = "006"
+        fhr_int = int(initial_fhr_from_request_str)
+        if 0 <= fhr_int <= 384:
+            initial_fhr_for_image_lookup = f"{fhr_int:03d}"
+    except ValueError: 
+        pass # initial_fhr_for_image_lookup remains "006"
 
     image_info = get_gfs_image_details_with_fallback(
-        initial_fhr, 
+        initial_fhr_for_image_lookup, 
         param_config['output_file_prefix'], 
         print
     )
-
+    
     page_title_for_display = f"GFS {param_config['name_display']} - F{image_info['actual_fhr']} (Run: {image_info['actual_run_date']} {image_info['actual_run_hour']}Z)"
     if not image_info['image_exists']:
         page_title_for_display = f"GFS {param_config['name_display']}"
 
     available_fhrs_list = [f"{h:03d}" for h in range(0, 121, 6)]
-
+    
     parameter_options_for_template = [
         {'code': key, 'name': value['name_display']} 
         for key, value in AVAILABLE_GFS_PARAMETERS_CONFIG.items()
     ]
+
+    # --- Determine the integer version of the FHR for the slider ---
+    # image_info['actual_fhr'] is the string FHR that an image was found for (e.g., "006", "012")
+    # or the one it targeted if no image was found.
+    current_fhr_initial_int_for_slider = 6 # Default to 6 (for F006)
+    try:
+        current_fhr_initial_int_for_slider = int(image_info['actual_fhr'])
+    except (ValueError, TypeError): # Handle if actual_fhr is None or not a valid int string
+        print(f"Warning: Could not convert actual_fhr '{image_info['actual_fhr']}' to int for slider. Defaulting.")
+    # --- End determination for slider int value ---
 
     context = {
         'page_title_initial': page_title_for_display,
         'model_image_url_initial': image_info['image_url'],
         'image_exists_initial': image_info['image_exists'],
         'status_message_initial': image_info['display_message'],
-        'current_fhr_initial': image_info['actual_fhr'],
+        'current_fhr_initial': image_info['actual_fhr'], # String for display and JS logic: "006"
+        'current_fhr_initial_int': current_fhr_initial_int_for_slider, # Integer for slider value: 6
         'current_param_code_initial': requested_param_code, 
         'available_fhrs': available_fhrs_list,
         'available_parameters': parameter_options_for_template, 
-        'api_url_for_js': reverse('weather:api_gfs_model_data') # Uses the name from urls.py
+        'api_url_for_js': reverse('weather:api_gfs_model_data') 
     }
-    return render(request, 'weather/gfs_model_page.html', context) # Template for this page
+    return render(request, 'weather/gfs_model_page.html', context)
 
 @login_required
 def get_gfs_model_api_data(request): # THIS IS THE API VIEW

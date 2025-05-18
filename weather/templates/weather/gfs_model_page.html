@@ -42,22 +42,39 @@
         </div>
     </div>
 
-    <div class="text-center mt-4 model-image-container">
-        <img id="model-plot-image" 
-             src="{{ model_image_url_initial|default:'' }}" 
-             alt="GFS Model Plot" 
-             class="img-fluid border shadow-sm" 
-             style="display: {% if image_exists_initial and model_image_url_initial %}block{% else %}none{% endif %};">
-        <div id="no-image-message" class="alert alert-warning mt-4" role="alert" 
-             style="display: {% if image_exists_initial and model_image_url_initial %}none{% else %}block{% endif %};">
-            {% if image_exists_initial and model_image_url_initial %}
-                {{ status_message_initial }}
-            {% else %}
-                The weather model image is currently not available for the selected criteria. It might need to be generated.
-            {% endif %}
-        </div>
+<div class="mb-3">
+    <label for="fhr-slider" class="form-label"><strong>Forecast Hour: <span id="fhr-slider-value-display" class="badge bg-secondary ms-1">F{{ current_fhr_initial|default:'006' }}</span></strong></label>
+    <input type="range" class="form-range" 
+           id="fhr-slider" 
+           min="0"  {# Corresponds to F000 #}
+           max="120" {# Corresponds to F120 - adjust if your max FHR is different #}
+           step="6"  {# For 6-hourly GFS steps - adjust if your FHR steps are different #}
+           value="{{ current_fhr_initial_int|default:6 }}"> {# Use the integer value #}
+</div>
+
+
+<div class="text-center mt-4 model-image-container" 
+     style="width: 1200px; min-height: 800px; margin-left: auto; margin-right: auto; border: 1px solid #ddd; overflow: hidden; position: relative;"> 
+    {# Added styles for the container #}
+    {# position: relative; might be useful if we ever wanted to absolutely position something inside it #}
+
+    <img id="model-plot-image" 
+         src="{{ model_image_url_initial|default:'' }}" 
+         alt="GFS Model Plot" 
+         class="img-fluid"  {# img-fluid makes it responsive within the container #}
+         style="display:{% if image_exists_initial and model_image_url_initial %}block{% else %}none{% endif %}; margin: auto;"> 
+         {# Removed min-height/max-width from img, added margin:auto for centering if container is wider #}
+
+    <div id="no-image-message" 
+         class="alert alert-warning" 
+         role="alert" 
+         style="display: {% if image_exists_initial and model_image_url_initial %}none{% else %}block{% endif %}; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+         {# Styled the no-image message to be centered if the container has height #}
+        The weather model image is currently not available.
     </div>
 </div>
+
+
 {% endblock %}
 
 {% block extra_js %}
@@ -68,6 +85,10 @@
     // using the context variable 'api_url_for_js' passed from your view
     //const apiUrlModelImageInfo = "{{ api_url_for_js }}"; 
     const jsApiUrl = "{{ api_url_for_js }}";
+    const jsAvailableFHRNumeric = [{% for fhr in available_fhrs %}{{ fhr|slice:"1:"|add:0 }}{% if not forloop.last %},{% endif %}{% endfor %}];
+    const jsAvailableFHRStrings = [{% for fhr in available_fhrs %}"{{fhr}}"{% if not forloop.last %},{% endif %}{% endfor %}];
+
+
 </script>
 <script src="{% static 'weather/js/gfs_model_page.js' %}" defer></script>
 {% endblock %}
