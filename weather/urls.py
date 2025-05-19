@@ -13,7 +13,9 @@ urlpatterns = [
 
     # 2. Page for displaying specific GFS model parameters (Temp, CAPE, etc.)
     path('models/gfs/', views.gfs_model_page_view, name='gfs_model_page'),
-
-    # 3. API endpoint for fetching data for the GFS parameter page
     path('api/gfs-model-data/', views.get_gfs_model_api_data, name='api_gfs_model_data'),
+
+    path('models/nam/', views.nam_model_page_view, name='nam_model_page'),
+    path('api/nam-model-data/', views.get_nam_model_api_data, name='api_nam_model_data'),
+
 ]

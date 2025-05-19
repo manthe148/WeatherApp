@@ -69,12 +69,13 @@ SECRET_KEY = 'django-insecure-2aj@jzt#-a^$giskk)jm&v9oq37g-cr*+)if1ret3*5gb!^xou
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['192.168.5.111', 'unfortunateneighbor.com']
+ALLOWED_HOSTS = ['192.168.5.111', 'unfortunateneighbor.com', 'beta.unfortunateneighbor.com']
 
 
 # Add your tunnel URL (with https) to the trusted origins list
 CSRF_TRUSTED_ORIGINS = [
     'https://unfortunateneighbor.com', # Add the full HTTPS URL
+    'https://beta.unfortunateneighbor.com',
     # You might keep these if you also access via http/localhost sometimes
     # 'http://localhost:8000',
     # 'http://127.0.0.1:8000',

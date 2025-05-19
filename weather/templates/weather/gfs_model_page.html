@@ -1,94 +1,68 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}<span id="page-title-display">{{ page_title_initial|default:"GFS Weather Models" }}</span>{% endblock %}
+{% block title %}<span id="page-title-display">{{ page_title_initial|default:"GFS Models" }}</span>{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <h2 class="mb-3" id="model-main-heading">{{ page_title_initial|default:"GFS Weather Models" }}</h2>
-    <h1>test</h1>
-    {% comment %} Display Django messages if any (e.g., from view redirects) {% endcomment %}
-    {% if messages %}
-        {% for message in messages %}
-            <div class="alert alert-{% if message.tags %}{{ message.tags }}{% else %}info{% endif %} alert-dismissible fade show" role="alert">
-                {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
+    <h2 class="mb-1" id="model-main-heading">{{ page_title_initial|default:"GFS Models" }}</h2>
+    
+    {# New display for run and valid times #}
+    <p class="mb-1">
+        <small><strong>Run:</strong> <span id="model-run-time-display">{{ formatted_run_time_local_initial|default:"N/A" }}</span></small>
+    </p>
+    <p class="mb-3">
+        <small><strong>Valid:</strong> <span id="model-valid-time-display">{{ formatted_valid_time_local_initial|default:"N/A" }}</span></small>
+    </p>
+    
+    <p id="model-status-message" class="fst-italic">{{ status_message_initial|default:"Select parameter and forecast hour." }}</p>
+
+    {# Parameter Selection #}
+    <div class="mb-3">
+        <strong>Parameter:</strong>
+        {% for param_opt in available_parameters %}
+            <button type="button" 
+               class="btn btn-sm {% if param_opt.code == current_param_code_initial %}btn-success active{% else %}btn-outline-success{% endif %} me-1 mb-1 model-param-btn"
+               data-param-code="{{ param_opt.code }}">
+                {{ param_opt.name }}
+            </button>
         {% endfor %}
-    {% endif %}
-
-    <p id="model-status-message">{{ status_message_initial|default:"Select parameters and forecast hour." }}</p>
-
-    <div class="row">
-        <div class="col-md-12 mb-3">
-            <strong>Parameter:</strong>
-            {% for param_opt in available_parameters %}
-                <button type="button" 
-                   class="btn btn-sm {% if param_opt.code == current_param_code_initial %}btn-success active{% else %}btn-outline-success{% endif %} me-1 mb-1 model-param-btn"
-                   data-param-code="{{ param_opt.code }}">
-                    {{ param_opt.name }}
-                </button>
-            {% endfor %}
-        </div>
-        <div class="col-md-12 mb-3">
-            <strong>Forecast Hour:</strong>
-            {% for fhr_option in available_fhrs %}
-                <button type="button" 
-                   class="btn btn-sm {% if fhr_option == current_fhr_initial %}btn-primary active{% else %}btn-outline-primary{% endif %} me-1 mb-1 forecast-hour-btn"
-                   data-fhr="{{ fhr_option }}">
-                    F{{ fhr_option }}
-                </button>
-            {% endfor %}
-        </div>
     </div>
 
-<div class="mb-3">
-    <label for="fhr-slider" class="form-label"><strong>Forecast Hour: <span id="fhr-slider-value-display" class="badge bg-secondary ms-1">F{{ current_fhr_initial|default:'006' }}</span></strong></label>
-    <input type="range" class="form-range" 
-           id="fhr-slider" 
-           min="0"  {# Corresponds to F000 #}
-           max="120" {# Corresponds to F120 - adjust if your max FHR is different #}
-           step="6"  {# For 6-hourly GFS steps - adjust if your FHR steps are different #}
-           value="{{ current_fhr_initial_int|default:6 }}"> {# Use the integer value #}
-</div>
+    {# Slider and Buttons for Forecast Hour #}
+    <div class="mb-3">
+        <label for="fhr-slider" class="form-label"><strong>Forecast Hour: <span id="fhr-slider-value-display" class="badge bg-secondary ms-1">F{{ current_fhr_initial|default:'006' }}</span></strong></label>
+        <input type="range" class="form-range mt-1" 
+               id="fhr-slider" 
+               min="0" max="120" step="6" 
+               value="{{ current_fhr_initial_int|default:6 }}">
+    </div>
+    <div class="mb-3">
+        {% for fhr_option in available_fhrs %}
+            <button type="button" 
+               class="btn btn-sm {% if fhr_option == current_fhr_initial %}btn-primary active{% else %}btn-outline-primary{% endif %} me-1 mb-1 forecast-hour-btn"
+               data-fhr="{{ fhr_option }}">
+                F{{ fhr_option }}
+            </button>
+        {% endfor %}
+    </div>
 
-
-<div class="text-center mt-4 model-image-container" 
-     style="width: 1200px; min-height: 800px; margin-left: auto; margin-right: auto; border: 1px solid #ddd; overflow: hidden; position: relative;"> 
-    {# Added styles for the container #}
-    {# position: relative; might be useful if we ever wanted to absolutely position something inside it #}
-
-    <img id="model-plot-image" 
-         src="{{ model_image_url_initial|default:'' }}" 
-         alt="GFS Model Plot" 
-         class="img-fluid"  {# img-fluid makes it responsive within the container #}
-         style="display:{% if image_exists_initial and model_image_url_initial %}block{% else %}none{% endif %}; margin: auto;"> 
-         {# Removed min-height/max-width from img, added margin:auto for centering if container is wider #}
-
-    <div id="no-image-message" 
-         class="alert alert-warning" 
-         role="alert" 
-         style="display: {% if image_exists_initial and model_image_url_initial %}none{% else %}block{% endif %}; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
-         {# Styled the no-image message to be centered if the container has height #}
-        The weather model image is currently not available.
+    <div class="text-center mt-3 model-image-container" style="width: 100%; max-width: 1121px; min-height: 800px; margin-left: auto; margin-right: auto; border: 1px solid #ddd; overflow: hidden; position: relative;">
+        <img id="model-plot-image" src="{{ model_image_url_initial|default:'' }}" alt="GFS Model Plot" class="img-fluid" style="display: {% if image_exists_initial and model_image_url_initial %}block{% else %}none{% endif %}; margin: auto;">
+        <div id="no-image-message" class="alert alert-warning" role="alert" style="display: {% if image_exists_initial and model_image_url_initial %}none{% else %}block{% endif %}; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+            {{ status_message_initial|default:"Image not available." }}
+        </div>
     </div>
 </div>
-
-
 {% endblock %}
 
 {% block extra_js %}
 <script>
     const initialFHR = "{{ current_fhr_initial|default:'006' }}";
     const initialParamCode = "{{ current_param_code_initial|default:'t2m' }}";
-    // This defines the JS const 'apiUrlModelImageInfo' 
-    // using the context variable 'api_url_for_js' passed from your view
-    //const apiUrlModelImageInfo = "{{ api_url_for_js }}"; 
-    const jsApiUrl = "{{ api_url_for_js }}";
-    const jsAvailableFHRNumeric = [{% for fhr in available_fhrs %}{{ fhr|slice:"1:"|add:0 }}{% if not forloop.last %},{% endif %}{% endfor %}];
-    const jsAvailableFHRStrings = [{% for fhr in available_fhrs %}"{{fhr}}"{% if not forloop.last %},{% endif %}{% endfor %}];
-
-
+    const jsApiUrl = "{{ api_url_for_js }}"; // From view context
+    const initialFormattedRunTime = "{{ formatted_run_time_local_initial|escapejs|default:'Run: N/A' }}";
+    const initialFormattedValidTime = "{{ formatted_valid_time_local_initial|escapejs|default:'Valid: N/A' }}";
 </script>
 <script src="{% static 'weather/js/gfs_model_page.js' %}" defer></script>
 {% endblock %}

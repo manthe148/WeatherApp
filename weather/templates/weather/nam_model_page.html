@@ -1,0 +1,50 @@
+{# weather/templates/weather/nam_model_page.html #}
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}<span id="page-title-display">{{ page_title_initial|default:"NAM Model" }}</span>{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-1" id="model-main-heading">{{ page_title_initial|default:"NAM Model" }}</h2>
+    <p class="mb-1"><small><strong>Run:</strong> <span id="model-run-time-display">{{ formatted_run_time_local_initial|default:"N/A" }}</span></small></p>
+    <p class="mb-3"><small><strong>Valid:</strong> <span id="model-valid-time-display">{{ formatted_valid_time_local_initial|default:"N/A" }}</span></small></p>
+    <p id="model-status-message" class="fst-italic">{{ status_message_initial|default:"Select parameter and forecast hour." }}</p>
+
+    <div class="mb-3">
+        <strong>Parameter:</strong>
+        {% for param_opt in available_parameters %}
+            <button type="button" class="btn btn-sm {% if param_opt.code == current_param_code_initial %}btn-success active{% else %}btn-outline-success{% endif %} me-1 mb-1 model-param-btn" data-param-code="{{ param_opt.code }}">{{ param_opt.name }}</button>
+        {% endfor %}
+    </div>
+
+    <div class="mb-3">
+        <label for="fhr-slider" class="form-label"><strong>Forecast Hour: <span id="fhr-slider-value-display" class="badge bg-secondary ms-1">F{{ current_fhr_initial|default:'00' }}</span></strong></label>
+        <input type="range" class="form-range mt-1" id="fhr-slider" 
+               min="0" max="84" step="1" {# NAM awphys often hourly then 3-hourly. Step 1 is simplest for slider with JS handling steps. #}
+               value="{{ current_fhr_initial_int|default:0 }}">
+    </div>
+    <div class="mb-3">
+        {% for fhr_option in available_fhrs %} {# available_fhrs from view should be NAM specific #}
+            <button type="button" class="btn btn-sm {% if fhr_option == current_fhr_initial %}btn-primary active{% else %}btn-outline-primary{% endif %} me-1 mb-1 forecast-hour-btn" data-fhr="{{ fhr_option }}">F{{ fhr_option }}</button>
+        {% endfor %}
+    </div>
+
+    <div class="text-center mt-3 model-image-container" style="width: 100%; max-width: 1121px; min-height: 600px; /* Adjust height */ margin-left: auto; margin-right: auto; border: 1px solid #ddd; overflow: hidden; position: relative;">
+        <img id="model-plot-image" src="{{ model_image_url_initial|default:'' }}" alt="NAM Model Plot" class="img-fluid" style="display: {% if image_exists_initial and model_image_url_initial %}block{% else %}none{% endif %}; margin: auto;">
+        <div id="no-image-message" class="alert alert-warning" role="alert" style="display: {% if image_exists_initial and model_image_url_initial %}none{% else %}block{% endif %}; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+            {{ status_message_initial|default:"Image not available." }}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const initialFHR = "{{ current_fhr_initial|default:'00' }}";
+    const initialParamCode = "{{ current_param_code_initial|default:'refc' }}"; // Default to reflectivity for NAM
+    const jsApiUrl = "{{ api_url_for_js }}"; // Should be reverse('weather:api_nam_model_data')
+    const jsAvailableFHRsNAM = [{% for fhr in available_fhrs %}"{{fhr}}"{% if not forloop.last %},{% endif %}{% endfor %}]; // Specific FHRs for NAM
+</script>
+<script src="{% static 'weather/js/nam_model_page.js' %}" defer></script> 
+{% endblock %}

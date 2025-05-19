@@ -7,30 +7,39 @@
 <div class="container mt-4">
     <h2>{{ page_title|default:"Select Weather Model" }}</h2>
     <p class="lead">Choose a weather model to view detailed forecast products.</p>
-
+    
     <div class="list-group mt-4">
+        {# GFS Link - Using your provided structure #}
         <a href="{% url 'weather:gfs_model_page' %}" class="list-group-item list-group-item-action">
             <div class="d-flex w-100 justify-content-between">
                 <h5 class="mb-1">Global Forecast System (GFS)</h5>
-                <small><i class="fas fa-arrow-right"></i></small>
+                <small><i class="fas fa-arrow-right"></i></small> {# Assumes you have Font Awesome for the icon #}
             </div>
             <p class="mb-1">View parameters like 2m Temperature, Surface CAPE, and Simulated Reflectivity.</p>
             <small>Global coverage, updated 4 times daily. Forecasts out to 16 days.</small>
         </a>
-        <div class="list-group-item list-group-item-action list-group-item-light disabled" tabindex="-1" aria-disabled="true">
-             <div class="d-flex w-100 justify-content-between">
+
+        {# Placeholder for NAM Link #}
+        <a href="{% if nam_page_ready %}{% url 'weather:nam_model_page' %}{% else %}#{% endif %}" 
+           class="list-group-item list-group-item-action {% if not nam_page_ready %}list-group-item-light disabled{% endif %}" 
+           {% if not nam_page_ready %}tabindex="-1" aria-disabled="true"{% endif %}>
+            <div class="d-flex w-100 justify-content-between">
                 <h5 class="mb-1">NAM (North American Mesoscale)</h5>
-                <span class="badge bg-secondary">Coming Soon</span>
+                {% if not nam_page_ready %}<span class="badge bg-secondary">Coming Soon</span>{% else %}<small><i class="fas fa-arrow-right"></i></small>{% endif %}
             </div>
-            <p class="mb-1">Higher resolution forecasts focused on North America.</p>
-        </div>
-         <div class="list-group-item list-group-item-action list-group-item-light disabled" tabindex="-1" aria-disabled="true">
-             <div class="d-flex w-100 justify-content-between">
+            <p class="mb-1">Higher resolution forecasts focused on North America (e.g., Simulated Reflectivity).</p>
+        </a>
+
+        {# Placeholder for HRRR Link #}
+        <a href="{% if hrrr_page_ready %}{% url 'weather:hrrr_model_page' %}{% else %}#{% endif %}" 
+           class="list-group-item list-group-item-action {% if not hrrr_page_ready %}list-group-item-light disabled{% else %}{% endif %}" 
+           {% if not hrrr_page_ready %}tabindex="-1" aria-disabled="true"{% endif %}>
+            <div class="d-flex w-100 justify-content-between">
                 <h5 class="mb-1">HRRR (High-Resolution Rapid Refresh)</h5>
-                <span class="badge bg-secondary">Coming Soon</span>
+                {% if not hrrr_page_ready %}<span class="badge bg-secondary">Coming Soon</span>{% else %}<small><i class="fas fa-arrow-right"></i></small>{% endif %}
             </div>
             <p class="mb-1">Very high-resolution short-range forecasts for the CONUS.</p>
-        </div>
+        </a>
     </div>
 </div>
 {% endblock %}
