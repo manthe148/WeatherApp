@@ -50,7 +50,7 @@ def automated_gfs_plot_generation(*args, **kwargs): # Added *args, **kwargs
            'output_file_prefix': 'gfs_refc', 
            'plot_title_param_name': 'Sim. Comp. Reflectivity',
            'plot_unit_label': 'Reflectivity (dBZ)', 
-           'plot_cmap': 'turbo', # Or 'turbo'
+           'plot_cmap': 'jet', # Or 'turbo'
            'plot_levels': list(range(5, 76, 5)) if np is None else np.arange(5, 76, 5),
            'needs_conversion_to_F': False
        }
@@ -128,7 +128,7 @@ def automated_nam_plot_generation(*args, **kwargs): # Accept args for scheduler
            'output_file_prefix': 'nam_refc', 
            'plot_title_param_name': 'Sim. Comp. Reflectivity',
            'plot_unit_label': 'Reflectivity (dBZ)', 
-           'plot_cmap': 'turbo', 
+           'plot_cmap': 'jet', 
            'plot_levels': list(range(5, 76, 5)) if np is None else np.arange(5, 76, 5),
            'needs_conversion_to_F': False 
         },
@@ -140,11 +140,15 @@ def automated_nam_plot_generation(*args, **kwargs): # Accept args for scheduler
             'needs_conversion_to_F': False
         },
         { 
-            'grib_short_name': '2d', 'grib_level': 2, 'grib_type_of_level': 'heightAboveGround',
-            'output_file_prefix': 'nam_dewp2m', 'plot_title_param_name': 'NAM 2m Dew Point',
-            'plot_unit_label': 'Dew Point (°F)', 'plot_cmap': 'Greens_r',
-            'plot_levels': np.arange(0, 81, 2),
-            'needs_conversion_to_F': True # NAM Dewpoint is in Kelvin
+            'grib_short_name': '2d', 
+            'grib_level': 2, 
+            'grib_type_of_level': 'heightAboveGround',
+            'output_file_prefix': 'gfs_dewp2m', 
+            'plot_title_param_name': '2m Dew Point',
+            'plot_unit_label': 'Dew Point (°F)', 
+            'plot_cmap': 'BuGn', # Colormap
+            'plot_levels': np.arange(0, 91, 2), # 0°F to 90°F in steps of 2°F
+            'needs_conversion_to_F': True 
         },
         { # Supercell Composite - GRIB DETAILS ARE EDUCATED GUESSES - VERIFY!
             'grib_short_name': 'compsup', # Example shortName, might be just 'scp' or require full Name search

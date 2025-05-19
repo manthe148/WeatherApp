@@ -139,19 +139,19 @@ def generate_gfs_parameter_plot(
         # print_grib_messages_debug(grbs, local_grib_filename, current_fhr_fmt, for_console_output)
 
         # --- UNCOMMENT OR ADD THIS DEBUG BLOCK ---
-        for_console_output(f"    --- GRIB Messages in {local_grib_filename} (for F{current_fhr_fmt}) ---")
-        messages_found_count = 0
-        for i, msg_debug in enumerate(grbs):
-            messages_found_count += 1
-            print_msg = (f"    Msg {i+1}: Name='{msg_debug.name}', Level={msg_debug.level}, "
-                         f"TypeOfLevel='{msg_debug.typeOfLevel}', shortName='{msg_debug.shortName if hasattr(msg_debug, 'shortName') else 'N/A'}'"
-                         f", Units='{msg_debug.units if hasattr(msg_debug, 'units') else 'N/A'}'")
-            for_console_output(print_msg)
-            if messages_found_count >= 50: # Print more messages if needed, e.g., first 50
-                for_console_output("    ... (listing first 50 messages)")
-                break 
-        grbs.seek(0) # IMPORTANT: Rewind GRIB file for further processing by grbs.select()
-        for_console_output(f"    --- End GRIB Message Debug List (parsed up to {messages_found_count} messages) ---")
+#        for_console_output(f"    --- GRIB Messages in {local_grib_filename} (for F{current_fhr_fmt}) ---")
+#        messages_found_count = 0
+#        for i, msg_debug in enumerate(grbs):
+#            messages_found_count += 1
+#            print_msg = (f"    Msg {i+1}: Name='{msg_debug.name}', Level={msg_debug.level}, "
+#                         f"TypeOfLevel='{msg_debug.typeOfLevel}', shortName='{msg_debug.shortName if hasattr(msg_debug, 'shortName') else 'N/A'}'"
+#                         f", Units='{msg_debug.units if hasattr(msg_debug, 'units') else 'N/A'}'")
+#            for_console_output(print_msg)
+#           if messages_found_count >= 50: # Print more messages if needed, e.g., first 50
+#                for_console_output("    ... (listing first 50 messages)")
+#                break 
+#        grbs.seek(0) # IMPORTANT: Rewind GRIB file for further processing by grbs.select()
+#        for_console_output(f"    --- End GRIB Message Debug List (parsed up to {messages_found_count} messages) ---")
             # --- END DEBUG BLOCK --
 
 
@@ -300,20 +300,20 @@ def generate_nam_parameter_plot(
 
 
 # --- THIS DEBUG BLOCK IS CRUCIAL ---
-        for_console_output(f"    --- GRIB Messages in {local_grib_filename} (for F{current_fhr_fmt} of {param_details.get('plot_title_param_name', 'N/A')}) ---")
-        messages_found_count = 0
-        for i, msg_debug in enumerate(grbs): # Use a different loop var like msg_debug
-            messages_found_count += 1
-            print_msg_line = (f"    Msg {i+1}: Name='{msg_debug.name}', "
-                         f"Level={msg_debug.level}, TypeOfLevel='{msg_debug.typeOfLevel}', "
-                         f"shortName='{msg_debug.shortName if hasattr(msg_debug, 'shortName') else 'N/A'}'"
-                         f", Units='{msg_debug.units if hasattr(msg_debug, 'units') else 'N/A'}'")
-            for_console_output(print_msg_line) # Use for_console_output
-            if messages_found_count >= 75: # Let's print more, e.g., first 75, to be thorough
-                for_console_output("    ... (listing first 75 messages, more might exist)")
-                break 
-        grbs.seek(0) # IMPORTANT: Rewind GRIB file for the actual grbs.select()
-        for_console_output(f"    --- End GRIB Message Debug List (parsed up to {messages_found_count} messages) ---")
+#        for_console_output(f"    --- GRIB Messages in {local_grib_filename} (for F{current_fhr_fmt} of {param_details.get('plot_title_param_name', 'N/A')}) ---")
+#        messages_found_count = 0
+#        for i, msg_debug in enumerate(grbs): # Use a different loop var like msg_debug
+#            messages_found_count += 1
+#            print_msg_line = (f"    Msg {i+1}: Name='{msg_debug.name}', "
+#                         f"Level={msg_debug.level}, TypeOfLevel='{msg_debug.typeOfLevel}', "
+#                         f"shortName='{msg_debug.shortName if hasattr(msg_debug, 'shortName') else 'N/A'}'"
+#                         f", Units='{msg_debug.units if hasattr(msg_debug, 'units') else 'N/A'}'")
+#            for_console_output(print_msg_line) # Use for_console_output
+#            if messages_found_count >= 75: # Let's print more, e.g., first 75, to be thorough
+#                for_console_output("    ... (listing first 75 messages, more might exist)")
+#                break 
+#        grbs.seek(0) # IMPORTANT: Rewind GRIB file for the actual grbs.select()
+#        for_console_output(f"    --- End GRIB Message Debug List (parsed up to {messages_found_count} messages) ---")
         # --- END DEBUG BLOCK ---
 
 
@@ -375,7 +375,7 @@ def generate_nam_parameter_plot(
 
         # Add Watermark
         watermark_text = "myweathersite.com" # <<< *** REPLACE THIS ***
-        fig.text(0.98, 0.02, watermark_text, fontsize=10, color='dimgray', alpha=0.6,
+        fig.text(0.98, 0.02, watermark_text, fontsize=20, color='black', alpha=0.6,
                  ha='right', va='bottom', transform=fig.transFigure, zorder=10)
 
         for_console_output(f"    DEBUG: Attempting to savefig to: {output_image_full_path}")

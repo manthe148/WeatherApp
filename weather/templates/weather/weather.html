@@ -23,32 +23,37 @@
 {# End of form #}
 
 {# Add the map container div with inline style for height #}
-<div id="map" style="height: 450px; margin-bottom: 25px; border: 1px solid #ccc;"></div>
+<div id="map" style="height: 750px; margin-bottom: 25px; border: 1px solid #ccc;"></div>
 {# End map container #}
 
 
 {% if alerts %}
     <h2>Active Alerts:</h2>
     {# Add a container div for Flexbox layout #}
-    <div class="alerts-container">
-        {% for alert in alerts %}
-            <article class="alert-item alert-{{ alert.severity|lower|slugify|default:'unknown' }}">
-                <h3>{{ alert.headline|default:"No Headline" }}</h3>
-                <p><strong>Event:</strong> {{ alert.event|default:"N/A" }}</p>
-                <p><strong>Severity:</strong> {{ alert.severity|default:"N/A" }}</p>
-                <p><strong>Areas Affected:</strong> {{ alert.areaDesc|default:"N/A" }}</p>
-                <p><strong>Effective:</strong> {{ alert.effective|date:"F j, Y, P T"|default:"N/A" }}</p>
-                <p><strong>Expires:</strong> {{ alert.expires|date:"F j, Y, P T"|default:"N/A" }}</p>
-                <hr>
-                <p><strong>Description:</strong></p>
-                <p>{{ alert.description|safe|default:"No Description Available" }}</p>
-            </article>
-        {% empty %}
-            {# This content is better outside the flex container if it exists #}
-             <p style="width: 100%;">No active weather alerts found for this location.</p>
-        {% endfor %}
-    </div> {# End of alerts-container #}
-
+            <div class="alert-scroll-container"> 
+            {% if alerts %}
+                {% for alert in alerts %}
+                    {# Using Bootstrap alert classes based on severity for better visual cue #}
+                    {% with alert.severity|lower as severity %}
+                        <div class="alert 
+                            {% if 'extreme' in severity or 'warning' in alert.event|lower %} alert-danger 
+                            {% elif 'severe' in severity or 'watch' in alert.event|lower %} alert-warning
+                            {% elif 'moderate' in severity or 'advisory' in alert.event|lower %} alert-info
+                            {% else %} alert-secondary {% endif %} mb-3" 
+                             role="alert">
+                            <h5 class="alert-heading">{{ alert.event }}</h5>
+                            <p class="mb-1"><strong>Headline:</strong> {{ alert.headline }}</p>
+                            <hr class="my-2">
+                            <small>{{ alert.description|safe }}</small>
+                        </div>
+                    {% endwith %}
+                {% endfor %}
+            {% else %}
+                {% if not error_message %} {# Only show "no active alerts" if there wasn't another error #}
+                    <p>No active NWS alerts for {{ location_name|default:"the selected area" }}.</p>
+                {% endif %}
+            {% endif %}
+            </div>
 {% elif not error_message %}
     <p>No active weather alerts found for this location.</p> {# Handles case where alerts list is missing/None #}
 {% endif %}

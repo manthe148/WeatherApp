@@ -71,7 +71,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const rvTileSize = 256;    // Using 256px tiles as you found it worked
         const rvColorScheme = 4;   // Default RainViewer color scheme (can be changed)
-        const rvSmooth = 1;        // 0 for false (sharper)
+        const rvSmooth = 0;        // 0 for false (sharper)
         const rvSnowFilter = 1;    // 1 to show snow
 
         const radarTileUrl = `https://tilecache.rainviewer.com${mostRecentPastFrame.path}/${rvTileSize}/{z}/{x}/{y}/${rvColorScheme}/${rvSmooth}_${rvSnowFilter}.png`;
@@ -191,5 +191,65 @@ document.addEventListener('DOMContentLoaded', function() {
         collapsed: false 
     }).addTo(map);
     console.log("Main.js: Layer control added/updated.");
+
+
+
+ if (typeof L.Control.Recenter !== 'function') { // Prevent re-definition if script runs multiple times (e.g., in SPA-like behavior)
+        L.Control.Recenter = L.Control.extend({
+            options: {
+                position: 'topright' // Same as default layer control
+            },
+
+            onAdd: function (map) {
+                // Create a container div for the button, styled like Leaflet controls
+                const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
+
+                // Create the button element
+                const button = L.DomUtil.create('a', 'recenter-button', container);
+                button.innerHTML = '<i class="fas fa-location-arrow" title="Recenter Map"></i>'; // Using Font Awesome icon
+                // Or use text: button.innerHTML = 'Recenter'; button.title = 'Recenter Map';
+                button.href = '#';
+                button.setAttribute('role', 'button');
+                button.style.width = '30px'; // Match Leaflet default control button size
+                button.style.height = '30px';
+                button.style.lineHeight = '30px';
+                button.style.textAlign = 'center';
+                button.style.fontSize = '1.2em'; // Adjust icon size
+
+                // Prevent map click when clicking button
+                L.DomEvent.disableClickPropagation(button);
+                L.DomEvent.on(button, 'click', function (ev) {
+                    L.DomEvent.stop(ev); // Stop event from propagating to map
+                    console.log("Leaflet Recenter control clicked. Centering on:", mapInitialLat, mapInitialLon);
+                    if (map && typeof mapInitialLat !== 'undefined' && typeof mapInitialLon !== 'undefined') {
+                        const recenterZoom = map.getZoom() < 7 ? 7 : map.getZoom();
+                        map.setView([mapInitialLat, mapInitialLon], recenterZoom);
+
+                        // Optional: Re-open popup on initial marker (if you have a reference to it)
+                        // if (initialMarker && typeof initialMarker.openPopup === 'function') {
+                        //     initialMarker.openPopup();
+                        // }
+                    } else {
+                        console.error("Map object or initial coordinates not available for recenter.");
+                    }
+                });
+
+                return container;
+            },
+
+            onRemove: function (map) {
+                // Nothing to do here
+            }
+        });
+    } // End if typeof L.Control.Recenter
+
+    // Add the custom control to the map
+    if (map && typeof L.Control.Recenter === 'function') {
+        new L.Control.Recenter().addTo(map);
+        console.log("Custom Recenter map control added.");
+    }
+
+
+
 
 }); // End DOMContentLoaded listener

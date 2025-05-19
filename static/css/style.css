@@ -151,3 +151,31 @@ footer {
      background-color: #f3d0f0;
  }
 
+/* static/css/style.css */
+
+.alert-scroll-container {
+    max-height: 500px; /* Adjust this height to match your map height or desired scroll height */
+    overflow-y: auto;  /* Show vertical scrollbar only if content overflows */
+    padding-right: 10px; /* Add some padding so scrollbar doesn't overlap content too much */
+    border: 1px solid #eee; /* Optional: adds a light border around the scroll box */
+    border-radius: 0.25rem; /* Optional: matches Bootstrap's border-radius */
+    margin-bottom: 20px; /* Optional: space below the box */
+}
+
+/* Optional: Style individual alerts inside the scroll box if needed */
+.alert-scroll-container .alert {
+    /* You could add specific margins here if the default Bootstrap ones are too much/little */
+}
+
+
+.leaflet-control-custom .recenter-button {
+    /* Your custom styles here if needed */
+    /* For example, to match other Leaflet buttons: */
+    background-image: none; /* If you used text instead of an icon font */
+    /* color: #333; */
+    /* font-weight: bold; */
+}
+.leaflet-control-custom .recenter-button i {
+    /* Style for Font Awesome icon if you used it */
+    vertical-align: middle;
+}

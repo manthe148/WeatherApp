@@ -18,7 +18,7 @@ from django.utils import timezone as django_utils_tz # Alias for django.utils.ti
 # Your other imports
 from .grib_processing import get_gfs_image_details_with_fallback, get_latest_nam_rundate_and_hour
 from subscriptions.models import Subscription # Assuming this is your model
-from subscriptions.tasks import fetch_alerts_by_zone_or_point # Assuming this is where it is
+from subscriptions.tasks import fetch_alerts_by_zone_or_point, get_nws_zone_for_coords # Assuming this is where it is
 
 # --- Configuration Dictionaries ---
 AVAILABLE_GFS_PARAMETERS_CONFIG = {
@@ -38,27 +38,38 @@ AVAILABLE_NAM_PARAMETERS_CONFIG = {
 
 # --- Your get_weather_alerts function (from response #316) ---
 # Make sure all its imports and helper calls are correct.
-def get_weather_alerts(request):
+def get_weather_alerts(request): # This view is public
     site_default_lat = Decimal("36.44")
     site_default_lon = Decimal("-95.28")
     site_default_name = "Adair, OK (Site Default)"
+
     current_latitude = site_default_lat
     current_longitude = site_default_lon
     current_location_name = site_default_name
-    alerts_for_text_display = []
-    raw_alert_features = [] 
+
+    alerts_for_text_display = [] # For the textual list of alerts
+    raw_alert_features = []      # <<< INITIALIZE HERE for GeoJSON features for the map
     error_message = None
     source_of_location = "Site Default" 
+
     location_query = request.GET.get('location_query', '').strip()
-    admin_email_for_ua = "default_email@example.com"
+    print(f"\n--- WEATHER PAGE (/weather/) ---")
+    print(f"Received location_query: '{location_query}'")
+
+    # User-Agent email setup
+    admin_email_for_ua = "default_email@example.com" # Fallback
     try:
         if hasattr(settings, 'PUSH_NOTIFICATIONS_SETTINGS') and \
            isinstance(settings.PUSH_NOTIFICATIONS_SETTINGS.get("WP_CLAIMS"), dict) and \
            settings.PUSH_NOTIFICATIONS_SETTINGS["WP_CLAIMS"].get("sub"):
             admin_email_for_ua = settings.PUSH_NOTIFICATIONS_SETTINGS["WP_CLAIMS"]["sub"]
-        else: print("  Warning: VAPID admin email for User-Agent not found in settings, using fallback.")
-    except Exception as e_settings: print(f"  Warning: Error accessing VAPID email from settings: {e_settings}. Using fallback.")
+        else:
+            print("  Warning: VAPID admin email for User-Agent not found in settings, using fallback.")
+    except Exception as e_settings:
+        print(f"  Warning: Error accessing VAPID email from settings: {e_settings}. Using fallback.")
+
     geolocator = Nominatim(user_agent=f"MyWeatherApp/1.0 Geocoder ({admin_email_for_ua})")
+
     if location_query:
         source_of_location = f"Query: {location_query}"
         try:
@@ -74,6 +85,7 @@ def get_weather_alerts(request):
         except (GeocoderTimedOut, GeocoderServiceError, Exception) as e:
             error_message = f"Geocoding error for '{location_query}': {e}. Displaying alerts for site default."
             print(f"  Geopy EXCEPTION for query: {e}.")
+    
     elif request.user.is_authenticated and hasattr(request.user, 'profile') and request.user.profile is not None:
         source_of_location = f"User Default for {request.user.username}"
         try:
@@ -83,22 +95,94 @@ def get_weather_alerts(request):
                 current_longitude = default_location_obj.longitude
                 current_location_name = default_location_obj.location_name
                 source_of_location = f"User Default: {current_location_name}"
-            else: print(f"  User authenticated but no explicit default location. Using site default.")
-        except Exception as e: print(f"  Error getting user's default: {e}. Using site default.")
-    else: print(f"  No query, and user not authenticated or no profile/default. Using site default: {current_location_name}")
-    nws_headers = {'User-Agent': f'MyWeatherApp/1.0 (AlertsPage NWS Call, {admin_email_for_ua})','Accept': 'application/geo+json'}
+                print(f"  Using USER'S DEFAULT location: {current_location_name} ({current_latitude}, {current_longitude})")
+            else:
+                print(f"  User authenticated but no explicit default location. Using site default.")
+        except Exception as e: # Catch specific exceptions like Profile.DoesNotExist if applicable
+            print(f"  Error getting user's default: {e}. Using site default.")
+    else:
+        print(f"  No query, and user not authenticated or no profile/default. Using site default: {current_location_name}")
+
+    print(f"Coordinates for NWS /points/ API call: Lat={current_latitude}, Lon={current_longitude}")
+    nws_headers = {
+        'User-Agent': f'MyWeatherApp/1.0 (AlertsPage NWS Call, {admin_email_for_ua})',
+        'Accept': 'application/geo+json'
+    }
+    
+    # Use the imported get_nws_zone_for_coords helper
     target_alert_zone = get_nws_zone_for_coords(current_latitude, current_longitude, nws_headers['User-Agent'])
-    raw_alert_features = fetch_alerts_by_zone_or_point(target_alert_zone, current_latitude, current_longitude, nws_headers['User-Agent'])
-    if raw_alert_features:
+    
+    nws_alerts_api_url = ""
+    fetch_method_for_log = ""
+    if target_alert_zone:
+        nws_alerts_api_url = f"https://api.weather.gov/alerts/active?zone={target_alert_zone}"
+        fetch_method_for_log = f"ZONE {target_alert_zone}"
+    else:
+        nws_alerts_api_url = f"https://api.weather.gov/alerts/active?point={current_latitude},{current_longitude}"
+        fetch_method_for_log = f"POINT {current_latitude},{current_longitude}"
+    
+    print(f"  Fetching NWS alerts using {fetch_method_for_log}: {nws_alerts_api_url}")
+
+    try:
+        alerts_response = requests.get(nws_alerts_api_url, headers=nws_headers, timeout=20)
+        alerts_response.raise_for_status()
+        alerts_data_json = alerts_response.json()
+        
+        # Assign to raw_alert_features (which was initialized as [] above)
+        raw_alert_features = alerts_data_json.get('features', []) 
+        
+        # --- DEBUG: Print details of received raw alert features ---
+        # This is inside the try block, after raw_alert_features is assigned
         print(f"  DEBUG: Number of raw alert features received from API: {len(raw_alert_features)}")
-        for i, feature_debug in enumerate(raw_alert_features):
-            print(f"    Alert {i+1}: Event='{feature_debug.get('properties', {}).get('event', 'N/A')}', HasGeometry={'Yes' if feature_debug.get('geometry') else 'No'}")
-        for alert_feature in raw_alert_features:
+        for i, feature in enumerate(raw_alert_features): # Iterate over the correct variable
+            event_name = feature.get('properties', {}).get('event', 'N/A Event')
+            headline_text = feature.get('properties', {}).get('headline', 'N/A Headline')
+            has_geometry = "Yes" if feature.get('geometry') else "No"
+            print(f"    Alert {i+1}: Event='{event_name}', Headline='{headline_text[:60]}...', HasGeometry='{has_geometry}'")
+        # --- END DEBUG ---
+        
+        # Process for text display (using raw_alert_features)
+        for alert_feature in raw_alert_features: # Iterate over the correct list
             props = alert_feature.get('properties', {})
-            alerts_for_text_display.append({'id': props.get('id'), 'event': props.get('event', 'Weather Alert'),'headline': props.get('headline', 'N/A'),'severity': props.get('severity'),'description': props.get('description', '').replace('\n', '<br>')})
-        if not raw_alert_features and not error_message: messages.info(request, f"No active NWS alerts for {current_location_name}.")
-    else: print(f"  No raw alert features returned by fetch_alerts_by_zone_or_point for '{current_location_name}'")
-    context = {'alerts': alerts_for_text_display, 'error_message': error_message,'location_name': current_location_name, 'latitude': current_latitude,'longitude': current_longitude, 'location_query': location_query,'source_of_location': source_of_location,'alerts_geojson_json_for_map': json.dumps(raw_alert_features if raw_alert_features else [])}
+            alerts_for_text_display.append({ # Changed variable name here
+                'id': props.get('id'),
+                'event': props.get('event', 'Weather Alert'),
+                'headline': props.get('headline', 'Check weather app for details.'),
+                'severity': props.get('severity'),
+                'description': props.get('description', '').replace('\n', '<br>')
+            })
+        
+        print(f"  Alerts processed for text display: {len(alerts_for_text_display)}")
+        if not raw_alert_features and not error_message: # If no alerts were fetched
+             messages.info(request, f"No active NWS alerts found for {current_location_name}.")
+
+    except requests.exceptions.RequestException as e:
+        print(f"  NWS Alerts API Error: {e}")
+        error_message = error_message or "Could not retrieve alerts from NWS at this time."
+        # raw_alert_features will remain []
+    except json.JSONDecodeError as e: # More specific error for JSON issues
+        print(f"  Error decoding NWS alerts JSON data: {e}")
+        traceback.print_exc()
+        error_message = error_message or "Error processing alert data from NWS (JSON)."
+    except Exception as e:
+        print(f"  General error processing NWS alerts data: {e}")
+        traceback.print_exc()
+        error_message = error_message or "Error processing alert data."
+        # raw_alert_features will remain []
+
+    # Context preparation
+    context = {
+        'alerts': alerts_for_text_display, # Use the correctly populated list for text
+        'error_message': error_message,
+        'location_name': current_location_name,
+        'latitude': current_latitude,
+        'longitude': current_longitude,
+        'location_query': location_query,
+        'source_of_location': source_of_location,
+        'alerts_geojson_json_for_map': json.dumps(raw_alert_features), # Use raw_alert_features
+    }
+    print(f"Context for weather.html: location_name='{context['location_name']}', alerts_for_text: {len(alerts_for_text_display)}, raw_features_for_map: {len(raw_alert_features)}")
+    print(f"-------------------------------------\n")
     return render(request, 'weather/weather.html', context)
 
 # Your weather_models_landing_view (from your #316 paste - assumed correct)
