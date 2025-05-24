@@ -135,23 +135,37 @@ def generate_gfs_parameter_plot(
         for_console_output(f"    Processing GRIB file: {local_grib_filename}")
         grbs = pygrib.open(local_grib_filename) # Open the unique local_grib_filename
         
-        # Optional GRIB message listing debug
-        # print_grib_messages_debug(grbs, local_grib_filename, current_fhr_fmt, for_console_output)
+        # Your existing grbs.select() call:
+        select_criteria = { # Build criteria dictionary
+            'level': param_details['grib_level'],
+            'typeOfLevel': param_details['grib_type_of_level']
+        }
+        if 'select_by_name' in param_details and param_details['select_by_name']:
+            select_criteria['name'] = param_details['select_by_name']
+        elif 'grib_short_name' in param_details and param_details['grib_short_name']:
+            select_criteria['shortName'] = param_details['grib_short_name']
+        else:
+            for_console_output(f"      ERROR: Neither 'select_by_name' nor 'grib_short_name' provided in param_details for {param_details.get('plot_title_param_name')}")
+            grbs.close()
+            return False, None
 
-        # --- UNCOMMENT OR ADD THIS DEBUG BLOCK ---
-#        for_console_output(f"    --- GRIB Messages in {local_grib_filename} (for F{current_fhr_fmt}) ---")
-#        messages_found_count = 0
-#        for i, msg_debug in enumerate(grbs):
-#            messages_found_count += 1
-#            print_msg = (f"    Msg {i+1}: Name='{msg_debug.name}', Level={msg_debug.level}, "
-#                         f"TypeOfLevel='{msg_debug.typeOfLevel}', shortName='{msg_debug.shortName if hasattr(msg_debug, 'shortName') else 'N/A'}'"
-#                         f", Units='{msg_debug.units if hasattr(msg_debug, 'units') else 'N/A'}'")
-#            for_console_output(print_msg)
-#           if messages_found_count >= 50: # Print more messages if needed, e.g., first 50
-#                for_console_output("    ... (listing first 50 messages)")
-#                break 
-#        grbs.seek(0) # IMPORTANT: Rewind GRIB file for further processing by grbs.select()
-#        for_console_output(f"    --- End GRIB Message Debug List (parsed up to {messages_found_count} messages) ---")
+        # Add topLevel and bottomLevel to criteria if they are in param_details
+        if 'grib_top_level' in param_details and param_details['grib_top_level'] is not None:
+            select_criteria['topLevel'] = param_details['grib_top_level']
+        if 'grib_bottom_level' in param_details and param_details['grib_bottom_level'] is not None:
+            select_criteria['bottomLevel'] = param_details['grib_bottom_level']
+
+        for_console_output(f"      Attempting grbs.select() with criteria: {select_criteria}")
+        selected_messages = grbs.select(**select_criteria)
+
+
+
+
+
+
+
+
+
             # --- END DEBUG BLOCK --
 
 
@@ -174,11 +188,33 @@ def generate_gfs_parameter_plot(
         data_values = grib_message.values
         lats, lons = grib_message.latlons()
         
-        plot_data_values = data_values 
-        if param_details.get('needs_conversion_to_F', False) and hasattr(grib_message, 'units') and grib_message.units == 'K':
-            plot_data_values = (data_values - 273.15) * 9/5 + 32
-            for_console_output(f"    Converted data from K to °F for {param_details['plot_title_param_name']}.")
-        
+        plot_data_values = data_values # Initialize with original values
+        original_units = grib_message.units if hasattr(grib_message, 'units') else 'N/A'
+
+        if param_details.get('needs_conversion_to_F', False):
+            if hasattr(grib_message, 'units') and grib_message.units == 'K':
+                plot_data_values = (data_values - 273.15) * 9/5 + 32 # K to °F
+                for_console_output(f"      SUCCESS: Converted data from K to °F for {param_details['plot_title_param_name']}.")
+            else:
+                for_console_output(f"      WARNING: 'needs_conversion_to_F' is True, but original units are '{original_units}', not 'K'. Plotting raw data: {np.min(plot_data_values):.2f} to {np.max(plot_data_values):.2f}")
+
+        # --- ENSURE THESE DEBUG LINES ARE PRESENT ---
+        for_console_output(f"      DEBUG: Original GRIB message units: {original_units}")
+        # Ensure numpy (np) is imported in your grib_processing.py for these np functions
+        if 'np' in globals() and plot_data_values is not None and hasattr(plot_data_values, 'min'): 
+            for_console_output(f"      DEBUG: Plotting data (should be in °F if converted) min: {np.min(plot_data_values):.2f}, max: {np.max(plot_data_values):.2f}, mean: {np.mean(plot_data_values):.2f}")
+        else: 
+            for_console_output(f"      DEBUG: plot_data_values type: {type(plot_data_values)}. np not available or not array-like for min/max/mean.")
+
+        current_plot_levels = param_details.get('plot_levels')
+        current_plot_levels_for_log = current_plot_levels
+        if hasattr(current_plot_levels, 'tolist'): # Convert numpy array to list for cleaner printing
+            current_plot_levels_for_log = current_plot_levels.tolist()
+        for_console_output(f"      DEBUG: Plot levels being used: {current_plot_levels_for_log}")
+        # --- END OF DEBUG LINES TO ENSURE ---
+
+  
+
         grbs.close()
         for_console_output(f"    GRIB data processed for {param_details['plot_title_param_name']} F{current_fhr_fmt}.")
 
@@ -300,20 +336,164 @@ def generate_nam_parameter_plot(
 
 
 # --- THIS DEBUG BLOCK IS CRUCIAL ---
-#        for_console_output(f"    --- GRIB Messages in {local_grib_filename} (for F{current_fhr_fmt} of {param_details.get('plot_title_param_name', 'N/A')}) ---")
-#        messages_found_count = 0
-#        for i, msg_debug in enumerate(grbs): # Use a different loop var like msg_debug
-#            messages_found_count += 1
-#            print_msg_line = (f"    Msg {i+1}: Name='{msg_debug.name}', "
-#                         f"Level={msg_debug.level}, TypeOfLevel='{msg_debug.typeOfLevel}', "
-#                         f"shortName='{msg_debug.shortName if hasattr(msg_debug, 'shortName') else 'N/A'}'"
-#                         f", Units='{msg_debug.units if hasattr(msg_debug, 'units') else 'N/A'}'")
-#            for_console_output(print_msg_line) # Use for_console_output
-#            if messages_found_count >= 75: # Let's print more, e.g., first 75, to be thorough
-#                for_console_output("    ... (listing first 75 messages, more might exist)")
-#                break 
-#        grbs.seek(0) # IMPORTANT: Rewind GRIB file for the actual grbs.select()
-#        for_console_output(f"    --- End GRIB Message Debug List (parsed up to {messages_found_count} messages) ---")
+
+        # --- START: NEW COMPREHENSIVE GRIB MESSAGE SEARCHING BLOCK ---
+        # Customize the 'current_search_parameter_name' for your log message
+        current_search_parameter_name = param_details.get('plot_title_param_name', 'Unknown Parameter')
+        for_console_output(f"    --- Searching ALL GRIB Messages in {local_grib_filename} for relevant keywords for '{current_search_parameter_name}' (F{current_fhr_fmt}) ---")
+        
+        found_potential_matches = False
+        # Define your keywords based on what you're currently debugging
+        # Example for when you are debugging Storm Relative Helicity:
+        # keywords_to_search = ['helicity', 'srh', 'hlcy', 'storm relative']
+        # Example for when you are debugging Dew Point:
+        # keywords_to_search = ['dewpoint', 'dew point', 'dpt', '2d', 'd2m']
+        # Example for when you are debugging UPHL:
+        # keywords_to_search = ['updraft', 'uphl', 'maxuh', 'helicity'] # Helicity is broad but UPHL contains it
+        # Example for when you are debugging Lightning:
+        # keywords_to_search = ['ltng', 'lightning']
+
+        # FOR THE CURRENT TEST, let's use a combined list if you're testing SRH or Dew Point again.
+        # Adjust this list based on the specific parameter you are trying to find in tasks.py!
+        if "Dew Point" in current_search_parameter_name:
+            keywords_to_search = ['dewpoint', 'dew point', 'dpt', '2d', 'd2m']
+        elif "Helicity" in current_search_parameter_name: # Catches both SRH and UPHL if UPHL title has "Helicity"
+            keywords_to_search = ['helicity', 'srh', 'hlcy', 'storm relative', 'uphl', 'updraft']
+        elif "Lightning" in current_search_parameter_name:
+            keywords_to_search = ['ltng', 'lightning']
+        else:
+            keywords_to_search = [] # Default to no keywords if param name doesn't give a hint
+            for_console_output(f"    INFO: No specific keywords defined for parameter '{current_search_parameter_name}'. Listing all messages might be too verbose if this happens.")
+
+
+        # Iterate through ALL messages in the GRIB file
+        for i, msg_debug in enumerate(grbs): 
+            msg_name_lower = ""
+            if hasattr(msg_debug, 'name') and isinstance(msg_debug.name, str):
+                msg_name_lower = msg_debug.name.lower()
+
+            msg_short_name_lower = ""
+            if hasattr(msg_debug, 'shortName') and isinstance(msg_debug.shortName, str):
+                msg_short_name_lower = msg_debug.shortName.lower()
+            
+            keyword_found_in_message = False
+            if not keywords_to_search: # If no keywords, don't try to match (or decide to print all, but that's verbose)
+                pass
+            else:
+                for keyword in keywords_to_search:
+                    if keyword in msg_name_lower or keyword in msg_short_name_lower:
+                        keyword_found_in_message = True
+                        break
+            
+            if keyword_found_in_message:
+                found_potential_matches = True
+                keys_to_print = [
+                    'name', 'shortName', 'paramId', 'units', 
+                    'level', 'typeOfLevel', 'levelName', 
+                    'topLevel', 'bottomLevel', 
+                    'discipline', 'parameterCategory', 'parameterNumber',
+                    'forecastTime', 'stepType', 'stepRange' 
+                ]
+                details = []
+                for key_to_print in keys_to_print:
+                    value_str = "N/A (key not present or error)" # Default if not found or error
+                    try:
+                        # pygrib messages often behave like dicts for key access for GRIB keys
+                        # or you can use specific methods if available (e.g., msg_debug.level)
+                        # Using __getitem__ (like msg_debug[key_to_print]) is often more direct for GRIB keys
+                        # but we'll try getattr first as it's more general for attributes/methods too.
+                        # However, the error comes from __getitem__ via __getattr__ in pygrib.
+                        
+                        # Let's try direct key access which pygrib often uses, and catch the specific error
+                        val = msg_debug[key_to_print] # Try accessing as a dictionary key
+                        if val is not None:
+                            value_str = f"{key_to_print}='{str(val)}'"
+                        else:
+                            value_str = f"{key_to_print}=None (explicitly)"
+                    except RuntimeError as e_grib:
+                        if "Key/value not found" in str(e_grib):
+                            value_str = f"{key_to_print}=N/A (key not found)"
+                        else:
+                            # For other RuntimeErrors from pygrib for this key
+                            value_str = f"{key_to_print}=ERROR_Runtime({str(e_grib)})" 
+                    except KeyError:
+                        # If it behaves purely like a dict and key is missing
+                        value_str = f"{key_to_print}=N/A (KeyError)"
+                    except Exception as e_other:
+                        # Catch any other unexpected errors for this specific key
+                        value_str = f"{key_to_print}=ERROR_Other({str(e_other)})"
+                    details.append(value_str)
+
+                
+                print_msg_line = f"    Potential Match (Msg Index {i+1}/{len(grbs)}): " + ", ".join(details) # Show total messages
+                for_console_output(print_msg_line)
+
+        if not found_potential_matches and keywords_to_search: # Only print if we were actually looking for keywords
+            for_console_output(f"    --- No GRIB messages found matching specified keywords {keywords_to_search} in the entire file. ---")
+        elif not keywords_to_search:
+             for_console_output(f"    --- No keywords specified for search; full GRIB scan for matches skipped. ---")
+
+        grbs.seek(0) # IMPORTANT: Rewind the GRIB file iterator for the actual grbs.select() call
+        for_console_output(f"    --- Finished searching. Attempting grbs.select() with current param_details. ---")
+        # --- END: NEW COMPREHENSIVE GRIB MESSAGE SEARCHING BLOCK ---
+
+        select_criteria = {}
+
+        if 'grib_level' in param_details:
+            select_criteria['level'] = param_details['grib_level']
+        else:
+            for_console_output(f"      ERROR: 'grib_level' missing in param_details for {param_details.get('plot_title_param_name')}")
+            if grbs: grbs.close()
+            return False, None # Essential to stop if basic criteria are missing
+            
+        if 'grib_type_of_level' in param_details:
+            select_criteria['typeOfLevel'] = param_details['grib_type_of_level']
+        else:
+            for_console_output(f"      ERROR: 'grib_type_of_level' missing in param_details for {param_details.get('plot_title_param_name')}")
+            if grbs: grbs.close()
+            return False, None # Essential to stop
+
+        # Prefer select_by_name if provided, otherwise use grib_short_name
+        if 'select_by_name' in param_details and param_details['select_by_name']:
+            select_criteria['name'] = param_details['select_by_name']
+            for_console_output(f"      Selecting by full name: '{param_details['select_by_name']}'")
+        elif 'grib_short_name' in param_details and param_details['grib_short_name']:
+            select_criteria['shortName'] = param_details['grib_short_name']
+            for_console_output(f"      Selecting by shortName: '{param_details['grib_short_name']}'")
+        else:
+            # If neither is provided, it's an error in param_details setup
+            for_console_output(f"      ERROR: Neither 'select_by_name' nor 'grib_short_name' key found or has value in param_details for {param_details.get('plot_title_param_name')}")
+            if grbs: grbs.close()
+            return False, None 
+
+        # Add topLevel and bottomLevel to criteria if they are in param_details and not None
+        if 'grib_top_level' in param_details and param_details['grib_top_level'] is not None:
+            select_criteria['topLevel'] = param_details['grib_top_level']
+        if 'grib_bottom_level' in param_details and param_details['grib_bottom_level'] is not None:
+            select_criteria['bottomLevel'] = param_details['grib_bottom_level']
+        
+        for_console_output(f"      Attempting grbs.select() with criteria: {select_criteria}")
+        try:
+            selected_messages = grbs.select(**select_criteria)
+        except ValueError as e: # Catch "no matches found" specifically
+            if "no matches found" in str(e).lower(): # make case insensitive
+                 for_console_output(f"      ERROR from grbs.select(): no matches found for criteria {select_criteria}")
+                 selected_messages = [] # Ensure it's an empty list
+            else:
+                raise # Re-raise other ValueErrors
+        # --- END: ROBUST SELECTION CRITERIA LOGIC ---
+        
+        grib_message = None
+        if selected_messages:
+            grib_message = selected_messages[0]
+            for_console_output(f"      SUCCESS: Found GRIB message for {param_details.get('plot_title_param_name', 'N/A')} using criteria {select_criteria}")
+        else: 
+            # This handles the case where selected_messages is empty from the try-except block above
+            for_console_output(f"      ERROR: Could not find GRIB message for {param_details.get('plot_title_param_name', 'N/A')} with criteria {select_criteria} (select call returned no messages or 'no matches found' was caught).")
+            if grbs: grbs.close()
+            return False, None
+
+
         # --- END DEBUG BLOCK ---
 
 
@@ -337,6 +517,40 @@ def generate_nam_parameter_plot(
         lats, lons = grib_message.latlons()
         # NAM data does not require Fahrenheit conversion for reflectivity or CAPE
         plot_data_values = data_values 
+
+        plot_data_values = data_values # Initialize
+        original_units = "N/A"
+        if hasattr(grib_message, 'units') and grib_message.units is not None:
+            original_units = grib_message.units
+            
+        for_console_output(f"      PRINT_DEBUG_STEP_1: Original GRIB units = '{original_units}'")
+
+        if param_details.get('needs_conversion_to_F', False):
+            if original_units == 'K':
+                plot_data_values = (data_values - 273.15) * 9/5 + 32 # K to °F
+                for_console_output(f"      PRINT_DEBUG_STEP_2: Data converted from K to °F.")
+            else:
+                 for_console_output(f"      PRINT_DEBUG_STEP_2: WARNING - 'needs_conversion_to_F' is True, but original units '{original_units}' != 'K'. Using raw data.")
+        else:
+             for_console_output(f"      PRINT_DEBUG_STEP_2: No temperature conversion requested or applied.")
+            
+            # Ensure numpy (np) is imported at the top of grib_processing.py
+        if 'np' in globals() and hasattr(plot_data_values, 'shape') and plot_data_values.size > 0:
+            min_val = np.nanmin(plot_data_values)
+            max_val = np.nanmax(plot_data_values)
+            mean_val = np.nanmean(plot_data_values)
+            for_console_output(f"      PRINT_DEBUG_STEP_3: plot_data_values (post-conversion, for plotting) - Min={min_val:.2f}, Max={max_val:.2f}, Mean={mean_val:.2f}, Shape={plot_data_values.shape}")
+        else:
+            for_console_output(f"      PRINT_DEBUG_STEP_3: plot_data_values could not be analyzed (np not found, or data is None/empty). Type: {type(plot_data_values)}")
+
+        current_plot_levels = param_details.get('plot_levels')
+        current_plot_levels_for_log = "N/A"
+        if current_plot_levels is not None:
+            current_plot_levels_for_log = str(current_plot_levels.tolist() if hasattr(current_plot_levels, 'tolist') else current_plot_levels)
+        for_console_output(f"      PRINT_DEBUG_STEP_4: Plot levels being used: {current_plot_levels_for_log}")
+            
+   
+
 
         grbs.close()
         for_console_output(f"    NAM GRIB data processed for {param_details['plot_title_param_name']} F{current_fhr_fmt}.")

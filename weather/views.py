@@ -31,9 +31,14 @@ AVAILABLE_NAM_PARAMETERS_CONFIG = {
     'refc': {'name_display': 'Sim. Comp. Reflectivity', 'output_file_prefix': 'nam_refc'},
     'sbcape': {'name_display': 'Surface CAPE', 'output_file_prefix': 'nam_sbcape'},
     'dewp2m': {'name_display': 'NAM 2m Dew Point', 'output_file_prefix': 'nam_dewp2m'},
-    'scp': {'name_display': 'NAM Supercell Composite', 'output_file_prefix': 'nam_scp'},
-    'stp': {'name_display': 'NAM Sig. Tornado Param.', 'output_file_prefix': 'nam_stp'},
-
+    'nam_srh_3km': { # Storm Relative Helicity 0-3 km
+        'name_display': 'Storm Relative Helicity 0-3km',
+        'output_file_prefix': 'nam_srh_3km' # Example prefix
+    },
+    'ltng_sfc': { # This is the 'code' your JavaScript will use from the param selector
+        'name_display': 'NAM Surface Lightning', # Text displayed in the button/dropdown
+        'output_file_prefix': 'nam_ltng_sfc' # MUST MATCH the prefix used in tasks.py to save the image
+    }
 }
 
 # --- Your get_weather_alerts function (from response #316) ---

@@ -26,7 +26,7 @@ def automated_gfs_plot_generation(*args, **kwargs): # Added *args, **kwargs
     run_date_str, model_run_hour_str = get_latest_gfs_rundate_and_hour(print)
 
     forecast_hours_to_generate = [f"{h:03d}" for h in range(0, 121, 6)] # e.g., F000, F006, ... F120
-
+#    forecast_hours_to_generate = ["06"]
     # --- DEFINE PARAMETERS TO PLOT ---
     parameters_to_plot = [
         {
@@ -110,10 +110,10 @@ def automated_nam_plot_generation(*args, **kwargs): # Accept args for scheduler
     # NAM forecast hours: Hourly out to F36, then 3-hourly out to F84 for awphys products.
     # Let's generate a selection: e.g., F00, F01, F02, F03, then every 3 hours.
     forecast_hours_to_generate = []
-    for h in range(0, 37): # Hourly from 00 to 36
-        forecast_hours_to_generate.append(f"{h:02d}")
-    for h in range(39, 85, 3): # 3-hourly from 39 to 84
-        forecast_hours_to_generate.append(f"{h:02d}")
+#    for h in range(0, 37): # Hourly from 00 to 36
+#        forecast_hours_to_generate.append(f"{h:02d}")
+#    for h in range(39, 85, 3): # 3-hourly from 39 to 84
+#        forecast_hours_to_generate.append(f"{h:02d}")
     # Remove duplicates if any and sort (though above logic should be fine)
     # forecast_hours_to_generate = sorted(list(set(forecast_hours_to_generate)))
 
@@ -140,34 +140,47 @@ def automated_nam_plot_generation(*args, **kwargs): # Accept args for scheduler
             'needs_conversion_to_F': False
         },
         { 
-            'grib_short_name': '2d', 
+            'grib_short_name': '2d', #was 2d 
             'grib_level': 2, 
             'grib_type_of_level': 'heightAboveGround',
-            'output_file_prefix': 'gfs_dewp2m', 
+            'output_file_prefix': 'nam_dewp2m', 
             'plot_title_param_name': '2m Dew Point',
             'plot_unit_label': 'Dew Point (°F)', 
             'plot_cmap': 'BuGn', # Colormap
             'plot_levels': np.arange(0, 91, 2), # 0°F to 90°F in steps of 2°F
             'needs_conversion_to_F': True 
         },
-        { # Supercell Composite - GRIB DETAILS ARE EDUCATED GUESSES - VERIFY!
-            'grib_short_name': 'compsup', # Example shortName, might be just 'scp' or require full Name search
-            'grib_level': 0, 
-            'grib_type_of_level': 'surface', 
-            'output_file_prefix': 'nam_scp', 'plot_title_param_name': 'NAM Supercell Composite',
-            'plot_unit_label': 'SCP (Index)', 'plot_cmap': 'YlOrRd',
-            'plot_levels': np.arange(0, 21, 1),
+        {
+            # You can choose to select by shortName or full name.
+            # The robust selection logic in grib_processing.py will handle either.
+            'grib_short_name': 'hlcy',                 # From GRIB dump
+            # 'select_by_name': 'Storm relative helicity', # Alternative, also from GRIB dump
+
+            'grib_level': 3000,                        # From 'level' field in GRIB dump
+            'grib_type_of_level': 'heightAboveGroundLayer', # From GRIB dump
+            'grib_top_level': 3000,                    # From GRIB dump (convert to int)
+            'grib_bottom_level': 0,                     # From GRIB dump (convert to int)
+
+            'output_file_prefix': 'nam_srh_3km',       # As per your current logs
+            'plot_title_param_name': 'NAM 3km Storm Relative Helicity', # Or "NAM 0-3km SRH"
+            'plot_unit_label': 'SRH (m²/s²)',          # 'units' from GRIB dump is 'm**2 s**-2'
+            'plot_cmap': 'BuPu',
+            'plot_levels': np.arange(50, 601, 50) if 'np' in globals() else list(range(50, 601, 50)),
             'needs_conversion_to_F': False
         },
-        { # Significant Tornado Parameter - GRIB DETAILS ARE EDUCATED GUESSES - VERIFY!
-            'grib_short_name': 'sigtor', # Example shortName, might be 'stp', 'sigtidx' or require full Name search
-            'grib_level': 0, 
-            'grib_type_of_level': 'surface', 
-            'output_file_prefix': 'nam_stp', 'plot_title_param_name': 'NAM Sig. Tornado Param.',
-            'plot_unit_label': 'STP (Index)', 'plot_cmap': 'PuRd',
-            'plot_levels': np.arange(0, 11, 0.5),
+        {
+            'grib_short_name': 'ltng',
+            'grib_level': 0,
+            'grib_type_of_level': 'surface',
+            'output_file_prefix': 'nam_ltng_sfc', # sfc for surface
+            'plot_title_param_name': 'NAM Surface Lightning',
+            'plot_unit_label': 'Lightning Activity', # We will confirm units from GRIB dump
+            'plot_cmap': 'hot_r',                   # 'inferno', 'magma', 'plasma' are also good for activity
+            'plot_levels': np.arange(0, 11, 1) if np else list(range(0,11,1)), # GUESS: If it's an index or low count. Adjust based on data.
             'needs_conversion_to_F': False
         }
+
+
     ]
 
 

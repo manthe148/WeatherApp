@@ -136,11 +136,14 @@ WSGI_APPLICATION = 'weather_site.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'myWeatherApp',         # Same as POSTGRES_DB in docker-compose.yml
+        'USER': 'manthe148',      # Same as POSTGRES_USER
+        'PASSWORD': 'Harry Potter and the chamber of secrets1!', # Same as POSTGRES_PASSWORD
+        'HOST': 'localhost',           # Or '127.0.0.1' because we mapped the port to localhost
+        'PORT': '5432',                # Default PostgreSQL port
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators

@@ -7,10 +7,7 @@
 {% block content %}
 <div class="container mt-4">
     <h2 class="mb-1" id="model-main-heading">{{ page_title_initial|default:"NAM Model" }}</h2>
-    <p class="mb-1"><small><strong>Run:</strong> <span id="model-run-time-display">{{ formatted_run_time_local_initial|default:"N/A" }}</span></small></p>
-    <p class="mb-3"><small><strong>Valid:</strong> <span id="model-valid-time-display">{{ formatted_valid_time_local_initial|default:"N/A" }}</span></small></p>
-    <p id="model-status-message" class="fst-italic">{{ status_message_initial|default:"Select parameter and forecast hour." }}</p>
-
+    <p id="model-status-message" class="fst-italic" hidden>{{ status_message_initial|default:"Select parameter and forecast hour." }}</p>
     <div class="mb-3">
         <strong>Parameter:</strong>
         {% for param_opt in available_parameters %}
@@ -19,32 +16,55 @@
     </div>
 
     <div class="mb-3">
-        <label for="fhr-slider" class="form-label"><strong>Forecast Hour: <span id="fhr-slider-value-display" class="badge bg-secondary ms-1">F{{ current_fhr_initial|default:'00' }}</span></strong></label>
-        <input type="range" class="form-range mt-1" id="fhr-slider" 
-               min="0" max="84" step="1" {# NAM awphys often hourly then 3-hourly. Step 1 is simplest for slider with JS handling steps. #}
-               value="{{ current_fhr_initial_int|default:0 }}">
-    </div>
-    <div class="mb-3">
         {% for fhr_option in available_fhrs %} {# available_fhrs from view should be NAM specific #}
             <button type="button" class="btn btn-sm {% if fhr_option == current_fhr_initial %}btn-primary active{% else %}btn-outline-primary{% endif %} me-1 mb-1 forecast-hour-btn" data-fhr="{{ fhr_option }}">F{{ fhr_option }}</button>
         {% endfor %}
     </div>
 
-    <div class="text-center mt-3 model-image-container" style="width: 100%; max-width: 1121px; min-height: 600px; /* Adjust height */ margin-left: auto; margin-right: auto; border: 1px solid #ddd; overflow: hidden; position: relative;">
+    <div class="text-center mt-3 model-image-container" style="width: 100%; max-width: 1500px; min-height: 600px; /* Adjust height */ margin-left: auto; margin-right: auto; border: 1px solid #ddd; overflow: hidden; position: relative;">
+      <div style="display: flex; justify-content: space-between;">
+        <p class="mb-1"><small><strong>Run:</strong> <span id="model-run-time-display">{{ formatted_run_time_local_initial|default:"N/A" }}</span></small></p>
+     </div>
         <img id="model-plot-image" src="{{ model_image_url_initial|default:'' }}" alt="NAM Model Plot" class="img-fluid" style="display: {% if image_exists_initial and model_image_url_initial %}block{% else %}none{% endif %}; margin: auto;">
         <div id="no-image-message" class="alert alert-warning" role="alert" style="display: {% if image_exists_initial and model_image_url_initial %}none{% else %}block{% endif %}; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
             {{ status_message_initial|default:"Image not available." }}
         </div>
+     <div class="mb-3">
+        <label for="fhr-slider" class="form-label"><strong>Forecast Hour: <span id="fhr-slider-value-display" class="badge bg-secondary ms-1">F{{ current_fhr_initial|default:'00' }}</span></strong></label>
+        <p class="mb-3"><strong>Valid: <span id="model-valid-time-display">{{ formatted_valid_time_local_initial|default:"N/A" }}</span></strong></label>
+        <input type="range" class="form-range mt-1" id="fhr-slider"
+               min="0" max="84" step="1" {# NAM awphys often hourly then 3-hourly. Step 1 is simplest for slider with JS handling steps. #}
+               value="{{ current_fhr_initial_int|default:0 }}">
+     </div>
+
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-    const initialFHR = "{{ current_fhr_initial|default:'00' }}";
-    const initialParamCode = "{{ current_param_code_initial|default:'refc' }}"; // Default to reflectivity for NAM
-    const jsApiUrl = "{{ api_url_for_js }}"; // Should be reverse('weather:api_nam_model_data')
-    const jsAvailableFHRsNAM = [{% for fhr in available_fhrs %}"{{fhr}}"{% if not forloop.last %},{% endif %}{% endfor %}]; // Specific FHRs for NAM
+    // These are from your existing setup or expected by nam_model_page.js
+    const initialFHR = "{{ current_fhr_initial|default:'00'|escapejs }}";
+    const initialParamCode = "{{ current_param_code_initial|default:'refc'|escapejs }}";
+    const jsApiUrl = "{{ api_url_for_js|escapejs }}"; // From view context: reverse('weather:api_nam_model_data')
+
+    // Variables for initial display text, passed from Django view context
+    const initialFormattedRunTime = "{{ formatted_run_time_local_initial|default:'Run: N/A'|escapejs }}";
+    const initialFormattedValidTime = "{{ formatted_valid_time_local_initial|default:'Valid: N/A'|escapejs }}";
+
+    // --- NEW/UPDATED VARIABLES REQUIRED FOR PRELOADING LOGIC ---
+    // These must be passed from your nam_model_page_view context
+    const namRunDateStrGlobal = "{{ nam_run_date_str_initial|default:''|escapejs }}";
+    const namModelRunHourStrGlobal = "{{ nam_model_run_hour_str_initial|default:''|escapejs }}";
+    const mediaUrlModelPlotsGlobal = "{{ settings.MEDIA_URL }}model_plots/"; // Ensure 'model_plots/' is correct subdirectory
+    // Note: The nam_model_page.js file is set up to parse 'available_fhrs_data'
+    // and 'available_parameters_data' from the json_script elements below.
 </script>
-<script src="{% static 'weather/js/nam_model_page.js' %}" defer></script> 
+
+{# Using json_script for lists/objects is generally safer and easier to parse in JS #}
+{{ available_fhrs|json_script:"available_fhrs_data" }}
+{{ available_parameters|json_script:"available_parameters_data" }}
+
+{# Ensure the path to your JS file is correct and it's specific for NAM if needed #}
+<script src="{% static 'weather/js/nam_model_page.js' %}" defer></script>
 {% endblock %}
