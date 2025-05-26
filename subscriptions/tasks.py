@@ -21,35 +21,24 @@ User = get_user_model()
 def get_nws_zone_for_coords(latitude, longitude, task_user_agent):
     """Helper to get the NWS county or forecast zone for given coordinates."""
     nws_points_url = f"https://api.weather.gov/points/{latitude},{longitude}"
-    nws_headers = {
-        'User-Agent': task_user_agent,
-        'Accept': 'application/geo+json'
-    }
+    nws_headers = {'User-Agent': task_user_agent, 'Accept': 'application/geo+json'}
     target_alert_zone = None
     try:
-        points_response = requests.get(nws_points_url, headers=nws_headers, timeout=15)
+        points_response = requests.get(nws_points_url, headers=nws_headers, timeout=10) # Shorter timeout for util
         points_response.raise_for_status()
         points_data = points_response.json()
-        # Prefer county zone if available, as it's often more specific for alerts
         county_zone_url = points_data.get('properties', {}).get('county')
         if county_zone_url:
             target_alert_zone = county_zone_url.split('/')[-1]
-        else:
+        else: 
             forecast_zone_url = points_data.get('properties', {}).get('forecastZone')
             if forecast_zone_url:
                 target_alert_zone = forecast_zone_url.split('/')[-1]
-        
-        if target_alert_zone:
-            print(f"  NWS Zone ID for ({latitude},{longitude}): {target_alert_zone}")
-        else:
-            print(f"  Could not find NWS zone for ({latitude},{longitude}).")
         return target_alert_zone
-    except requests.exceptions.RequestException as e:
-        print(f"  Error calling NWS /points/ API for ({latitude},{longitude}): {e}")
     except Exception as e:
-        print(f"  Unexpected error processing NWS /points/ data for ({latitude},{longitude}): {e}")
-        traceback.print_exc() # Print traceback for unexpected errors here
-    return None
+        # print(f"NAVBAR_UTIL: Error getting NWS zone for ({latitude},{longitude}): {e}") # Optional: log differently
+        return None
+
 
 # --- Helper function to fetch alerts ---
 def fetch_alerts_by_zone_or_point(zone_id, latitude, longitude, task_user_agent):
@@ -205,6 +194,8 @@ def check_weather_alerts_and_send_pushes():
                     "sound": "/static/sounds/danger.mp3"
                 }
                 json_string_payload = json.dumps(payload_dict) # Pre-serialize
+
+                print(f"SERVER_PUSH_DEBUG: Sending payload: {json_string_payload}")
                 print(f"    Attempting to send push: {json_string_payload}")
 
                 try:
@@ -224,3 +215,111 @@ def check_weather_alerts_and_send_pushes():
 
     end_time = datetime.now(timezone.utc)
     print(f"[{end_time.isoformat()}] Task finished. Duration: {end_time - start_time}")
+
+def fetch_and_determine_alert_priority_for_navbar(latitude, longitude):
+    """
+    Fetches NWS alerts for a point and determines the highest priority status.
+    Returns a dictionary: {'status': 'warning'|'watch'|'advisory'|None, 'count': int}
+    """
+    admin_email = "matt.mcdonald21@gmail.com" # Replace or get from settings
+    if hasattr(settings, 'ADMIN_EMAIL_FOR_NWS_USER_AGENT'): # Create this setting if you want
+        admin_email = settings.ADMIN_EMAIL_FOR_NWS_USER_AGENT
+    
+    user_agent_string = f"(UnfortunateNeighborApp/1.0 NavbarAlertCheck; {admin_email})"
+
+    zone_id = _get_nws_zone_for_coords_util(latitude, longitude, user_agent_string)
+
+    nws_alerts_api_url = ""
+    if zone_id:
+        nws_alerts_api_url = f"https://api.weather.gov/alerts/active?zone={zone_id}"
+    else:
+        nws_alerts_api_url = f"https://api.weather.gov/alerts/active?point={latitude},{longitude}"
+
+    highest_priority_status = None
+    alert_count = 0
+    current_priority_level = 0  # 3: Warning, 2: Watch, 1: Advisory/Statement
+
+    try:
+        nws_headers = {'User-Agent': user_agent_string, 'Accept': 'application/geo+json'}
+        response = requests.get(nws_alerts_api_url, headers=nws_headers, timeout=15)
+        response.raise_for_status()
+        data = response.json()
+        features = data.get('features', [])
+        
+        alert_count = len(features)
+        if not features:
+            return {'status': None, 'count': 0}
+
+        for alert in features:
+            properties = alert.get('properties', {})
+            event_type = properties.get('event', '').lower()
+            # NWS 'severity' can be: 'Extreme', 'Severe', 'Moderate', 'Minor', 'Unknown'
+            # 'event' (like "Tornado Warning") is often more direct for W/W/A classification
+
+            is_warning = 'warning' in event_type
+            is_watch = 'watch' in event_type
+            is_advisory = 'advisory' in event_type or 'statement' in event_type # e.g. Special Weather Statement
+
+            if is_warning:
+                if current_priority_level < 3:
+                    highest_priority_status = 'warning'
+                    current_priority_level = 3
+            elif is_watch:
+                if current_priority_level < 2:
+                    highest_priority_status = 'watch'
+                    current_priority_level = 2
+            elif is_advisory:
+                if current_priority_level < 1:
+                    highest_priority_status = 'advisory'
+                    current_priority_level = 1
+            
+    except requests.exceptions.RequestException as e:
+        # print(f"NAVBAR_UTIL: Error fetching NWS alerts: {e}") # Optional: log differently
+        return {'status': None, 'count': 0} 
+    except json.JSONDecodeError as e:
+        # print(f"NAVBAR_UTIL: Error decoding NWS JSON: {e}") # Optional: log differently
+        return {'status': None, 'count': 0}
+    
+    return {'status': highest_priority_status, 'count': alert_count}
+
+
+def get_user_navbar_alert_info(user):
+    """
+    Gets the NWS alert info for the user's default location for navbar display.
+    Results are cached for 10 minutes.
+    """
+    if not user or not user.is_authenticated:
+        return {'status': None, 'count': 0}
+
+    cache_key = f"user_navbar_alert_info_{user.id}"
+    cached_value = cache.get(cache_key)
+    if cached_value is not None:
+        return cached_value
+
+    alert_info_to_cache = {'status': None, 'count': 0} # Default
+
+    # Accessing user's default location:
+    # This needs to EXACTLY match your model structure.
+    # Your tasks.py uses: user.profile.saved_locations.filter(is_default=True).first()
+    default_location_obj = None
+    if hasattr(user, 'profile') and user.profile:
+        try:
+            # Ensure your SavedLocation model is imported if using this directly
+            # from accounts.models import SavedLocation 
+            default_location_obj = user.profile.saved_locations.filter(is_default=True).first()
+        except Exception as e:
+            # print(f"NAVBAR_UTIL: Error getting default location for {user.username}: {e}")
+            pass # default_location_obj remains None
+
+    if default_location_obj:
+        # print(f"NAVBAR_UTIL: Checking alerts for {user.username}'s default loc: {default_location_obj.location_name}")
+        alert_info_to_cache = fetch_and_determine_alert_priority_for_navbar(
+            default_location_obj.latitude,
+            default_location_obj.longitude
+        )
+    else:
+        # print(f"NAVBAR_UTIL: User {user.username} has no default location for navbar alerts.")
+        pass
+
+    cache.set(cache_key, alert_info_to_cache, 60 * 10) # Cache for 10 minutes
+    return alert_info_to_cache

@@ -1,42 +1,146 @@
-{% extends 'base.html' %}
+{# subscriptions/templates/subscriptions/plan_selection.html #}
+{% extends "base.html" %}
+{% load static %}
 
-{% block title %}Choose Subscription Plan{% endblock %}
+{% block title %}Choose Your Plan{% endblock %}
 
 {% block content %}
-<h2>Choose Your Subscription Plan</h2>
+<div class="container mt-4">
+    <h1 class="mb-4 text-center">Subscription Plans</h1>
 
-{% if messages %}
-  {# Display messages if redirected here after an error #}
-  <ul class="messages" style="list-style: none; padding: 0; margin: 1em 0;">
-    {% for message in messages %}
-      <li{% if message.tags %} class="{{ message.tags }}" style="padding: 10px; border: 1px solid; margin-bottom: 10px; border-radius: 4px; {% if message.level == 40 %} background-color: #f2dede; border-color: #ebccd1; color: #a94442; {% else %} background-color: #d9edf7; border-color: #bce8f1; color: #31708f;{% endif %}" {% endif %}>
-        {{ message }}
-      </li>
-    {% endfor %}
-  </ul>
-{% endif %}
+    {# Billing Interval Toggle #}
+    <div class="d-flex justify-content-center mb-4">
+        <div class="btn-group" role="group" aria-label="Billing interval toggle">
+            <input type="radio" class="btn-check" name="billingToggle" id="monthlyToggle" value="month" autocomplete="off" {% if current_billing_preference == 'month' %}checked{% endif %}>
+            <label class="btn btn-outline-primary" for="monthlyToggle">Monthly</label>
 
-<div class="plan-container" style="display: flex; flex-wrap: wrap; gap: 20px;">
-    {% for plan in plans %}
-        <div class="plan-card" style="border: 1px solid #ccc; padding: 20px; border-radius: 5px; flex: 1; min-width: 250px;">
-            <h3>{{ plan.name }}</h3>
-            <p style="font-size: 1.5em; font-weight: bold;">${{ plan.price|floatformat:2 }} / month</p> {# Assuming monthly for now #}
-            <p>{{ plan.features|linebreaksbr }}</p>
-
-            {# Form to initiate checkout for this specific plan #}
-            <form action="{% url 'subscriptions:create_checkout_session' %}" method="POST">
-                {% csrf_token %}
-                {# Pass the Stripe Price ID for the selected plan #}
-                <input type="hidden" name="price_id" value="{{ plan.stripe_price_id }}">
-                <button type="submit">Choose {{ plan.name }}</button>
-            </form>
+            <input type="radio" class="btn-check" name="billingToggle" id="yearlyToggle" value="year" autocomplete="off" {% if current_billing_preference == 'year' %}checked{% endif %}>
+            <label class="btn btn-outline-primary" for="yearlyToggle">Annually
+                {# You can dynamically show an average discount here if you want, or a static one #}
+                {% for tier in plan_tiers %}
+                    {% if tier.yearly_plan and tier.yearly_discount_percent > 0 %}
+                        <span class="badge bg-success ms-1">Save {{ first_available_yearly_discount }}%</span>
+                        {# Show discount from first available yearly plan #}
+                    {% endif %}
+                {% endfor %}
+            </label>
         </div>
-    {% empty %}
-        <p>No subscription plans are currently available.</p>
-    {% endfor %}
+    </div>
+
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 justify-content-center">
+        {% for tier in plan_tiers %}
+            {# Monthly Plan Card - initially shown if monthly is default or selected #}
+            {% with plan=tier.monthly_plan %}
+                {% if plan %}
+                <div class="col plan-card monthly-plan-card" {% if current_billing_preference == 'year' %}style="display:none;"{% endif %}>
+                    <div class="card h-100 shadow-sm">
+                        <div class="card-header bg-light">
+                            <h4 class="my-0 fw-normal">{{ tier.tier_name }} <span class="badge bg-secondary">Monthly</span></h4>
+                        </div>
+                        <div class="card-body d-flex flex-column">
+                            <h1 class="card-title pricing-card-title">${{ plan.price }}<small class="text-muted fw-light">/mo</small></h1>
+                            <ul class="list-unstyled mt-3 mb-4">
+                                {% for feature in tier.features %}
+                                    <li>{{ feature }}</li>
+                                {% endfor %}
+                            </ul>
+                            <form action="{% url 'subscriptions:create_checkout_session' %}" method="POST" class="mt-auto">
+                                {% csrf_token %}
+                                <input type="hidden" name="price_id" value="{{ plan.stripe_price_id }}">
+                                <button type="submit" class="w-100 btn btn-lg btn-outline-primary">Sign Up</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            {% endwith %}
+
+            {# Yearly Plan Card - initially shown if yearly is selected #}
+            {% with plan=tier.yearly_plan %}
+                {% if plan %}
+                <div class="col plan-card yearly-plan-card" {% if current_billing_preference == 'month' %}style="display:none;"{% endif %}>
+                    <div class="card h-100 shadow-sm border-success">
+                        <div class="card-header bg-success text-white">
+                            <h4 class="my-0 fw-normal">{{ tier.tier_name }} <span class="badge bg-light text-success">Annually</span></h4>
+                            {% if tier.yearly_discount_percent > 0 %}
+                                <span class="d-block"><small>Save {{ tier.yearly_discount_percent }}% vs Monthly!</small></span>
+                            {% endif %}
+                        </div>
+                        <div class="card-body d-flex flex-column">
+                            <h1 class="card-title pricing-card-title">${{ plan.price }}<small class="text-muted fw-light">/yr</small></h1>
+                             <p class="text-muted">
+                                {% if tier.effective_monthly_price is not None %}
+                                    (Only ${{ tier.effective_monthly_price|floatformat:2 }}/mo effectively)
+                                {% endif %}
+                             </p>
+                             
+                            <ul class="list-unstyled mt-3 mb-4">
+                                {% for feature in tier.features %}
+                                    <li>{{ feature }}</li>
+                                {% endfor %}
+                            </ul>
+                            <form action="{% url 'subscriptions:create_checkout_session' %}" method="POST" class="mt-auto">
+                                {% csrf_token %}
+                                <input type="hidden" name="price_id" value="{{ plan.stripe_price_id }}">
+                                <button type="submit" class="w-100 btn btn-lg btn-success">Sign Up & Save</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            {% endwith %}
+        {% empty %}
+            <p class="text-center">No subscription plans are currently available. Please check back later.</p>
+        {% endfor %}
+    </div>
 </div>
 
-{# We can optionally use the publishable key here if using Stripe Elements later #}
-{# <script>const stripePublishableKey = "{{ stripe_publishable_key }}";</script> #}
+{# Stripe.js if you need it for more advanced client-side stuff - not strictly needed for redirect-to-checkout #}
+{# <script src="https://js.stripe.com/v3/"></script> #}
+{# <script>var stripe = Stripe('{{ stripe_publishable_key }}');</script> #}
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const monthlyToggle = document.getElementById('monthlyToggle');
+    const yearlyToggle = document.getElementById('yearlyToggle');
+    const monthlyPlanCards = document.querySelectorAll('.monthly-plan-card');
+    const yearlyPlanCards = document.querySelectorAll('.yearly-plan-card');
+
+    function setBillingPreference(preference) {
+        if (preference === 'year') {
+            monthlyPlanCards.forEach(card => card.style.display = 'none');
+            yearlyPlanCards.forEach(card => card.style.display = 'block'); // Or 'flex' if using d-flex on col
+            document.cookie = "billingPreference=year;path=/;max-age=" + (365*24*60*60); // Save for 1 year
+        } else { // Default to monthly
+            monthlyPlanCards.forEach(card => card.style.display = 'block');
+            yearlyPlanCards.forEach(card => card.style.display = 'none');
+            document.cookie = "billingPreference=month;path=/;max-age=" + (365*24*60*60);
+        }
+    }
+
+    if (monthlyToggle) {
+        monthlyToggle.addEventListener('change', function() {
+            if (this.checked) {
+                setBillingPreference('month');
+            }
+        });
+    }
+
+    if (yearlyToggle) {
+        yearlyToggle.addEventListener('change', function() {
+            if (this.checked) {
+                setBillingPreference('year');
+            }
+        });
+    }
+
+    // Initial setup based on cookie or default from context
+    // const initialPreference = "{{ current_billing_preference }}";
+    // setBillingPreference(initialPreference); 
+    // This is handled by Django template's initial style="display:none;" now.
+});
+</script>
 {% endblock %}

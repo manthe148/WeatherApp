@@ -222,9 +222,13 @@ def generate_gfs_parameter_plot(
         fig = plt.figure(figsize=(12, 9))
         ax = plt.axes(projection=ccrs.PlateCarree())
         ax.set_extent([-125, -65, 23, 50], crs=ccrs.PlateCarree())
-        ax.add_feature(cfeature.COASTLINE, linewidth=0.8, edgecolor='dimgray', zorder=2)
-        ax.add_feature(cfeature.BORDERS, linestyle=':', linewidth=0.6, edgecolor='dimgray', zorder=2)
-        ax.add_feature(cfeature.STATES, linestyle=':', linewidth=0.6, edgecolor='dimgray', zorder=2)
+
+        ax.add_feature(cfeature.LAND, facecolor='lightgray', edgecolor='gray', zorder=0) # Light gray land with gray edge
+        ax.add_feature(cfeature.OCEAN, facecolor='lightblue', edgecolor='silver', zorder=0)   # White ocean with silver edge
+
+        ax.add_feature(cfeature.COASTLINE, linewidth=0.8, edgecolor='black', zorder=2)
+        ax.add_feature(cfeature.BORDERS, linestyle=':', linewidth=0.6, facecolor='', edgecolor='black', zorder=2)
+        ax.add_feature(cfeature.STATES, linestyle=':', linewidth=0.6, edgecolor='darkgray', zorder=2)
         
         plot_levels_val = param_details.get('plot_levels')
         plot_cmap_val = param_details.get('plot_cmap', 'jet')
@@ -246,7 +250,7 @@ def generate_gfs_parameter_plot(
         cb.ax.tick_params(labelsize=8) 
         ax.set_title(f"GFS {param_details['plot_title_param_name']}\nRun: {run_date_str} {model_run_hour_str}Z - Forecast: F{current_fhr_fmt}", fontsize=12)
         
-        watermark_text = "myweathersite.com" # <<< REPLACE THIS WITH YOUR ACTUAL SITE/COMPANY NAME
+        watermark_text = "unfortunateneighbor.com" # <<< REPLACE THIS WITH YOUR ACTUAL SITE/COMPANY NAME
         fig.text(0.98, 0.02, watermark_text, fontsize=20, color='black', alpha=0.9,
                  ha='right', va='bottom', transform=fig.transFigure, zorder=10)
         
@@ -268,6 +272,8 @@ def generate_gfs_parameter_plot(
             os.remove(local_grib_filename)
             for_console_output(f"    INFO: Cleaned up temporary GRIB file: {local_grib_filename}")
 
+
+######################################################################################################################################################
 
 def generate_nam_parameter_plot(
     run_date_str, model_run_hour_str, forecast_hour_str_arg, 
@@ -563,9 +569,13 @@ def generate_nam_parameter_plot(
         # These bounds roughly cover CONUS and are good for NAM CONUS nest.
         ax.set_extent([-125, -65, 23, 52], crs=ccrs.PlateCarree()) 
 
-        ax.add_feature(cfeature.COASTLINE, linewidth=0.8, edgecolor='dimgray', zorder=2)
-        ax.add_feature(cfeature.BORDERS, linestyle=':', linewidth=0.6, edgecolor='dimgray', zorder=2)
-        ax.add_feature(cfeature.STATES, linestyle=':', linewidth=0.6, edgecolor='dimgray', zorder=2)
+        ax.add_feature(cfeature.LAND, facecolor='white', edgecolor='gray', zorder=0) # Light gray land with gray edge
+        ax.add_feature(cfeature.OCEAN, facecolor='lightblue', edgecolor='silver', zorder=0)   # White ocean with silver edge
+
+
+        ax.add_feature(cfeature.COASTLINE, linewidth=0.8, edgecolor='black', zorder=2)
+        ax.add_feature(cfeature.BORDERS, linestyle=':', linewidth=0.6, edgecolor='black', zorder=2)
+        ax.add_feature(cfeature.STATES, linestyle=':', linewidth=0.6, edgecolor='darkgray', zorder=2)
 
         plot_levels_val = param_details.get('plot_levels')
         plot_cmap_val = param_details.get('plot_cmap', 'jet')

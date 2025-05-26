@@ -82,10 +82,71 @@ def create_customer_portal_session_view(request):
 
 @login_required
 def subscription_plan_view(request):
-    plans = Plan.objects.all().order_by('price')
+    print("--- DEBUG: Inside subscription_plan_view ---") # Check if view is hit
+
+    all_plans_qs = Plan.objects.all() # Get the queryset
+    print(f"--- DEBUG: Plan.objects.all() found {all_plans_qs.count()} plans initially. ---")
+
+    # Your existing logic to order and process into plan_tiers/displayable_tiers
+    # For example:
+    all_plans_ordered = all_plans_qs.order_by('tier_name', 'billing_interval')
+
+    plan_tiers = {}
+    for plan in all_plans_ordered:
+        if plan.tier_name not in plan_tiers:
+            plan_tiers[plan.tier_name] = {
+                'display_order': plan.display_order, 
+                'features': plan.features.splitlines() if plan.features else []
+            }
+        if plan.billing_interval == 'month':
+            plan_tiers[plan.tier_name]['month'] = plan
+        elif plan.billing_interval == 'year':
+            plan_tiers[plan.tier_name]['year'] = plan
+
+    displayable_tiers = []
+    for tier_name, data in plan_tiers.items():
+        monthly_plan = data.get('month')
+        yearly_plan = data.get('year')
+        discount_percent = 0
+        effective_monthly_price = None
+
+        if yearly_plan and yearly_plan.price is not None:
+            try:
+                effective_monthly_price = yearly_plan.price / 12
+            except TypeError:
+                effective_monthly_price = None
+
+        if monthly_plan and yearly_plan and monthly_plan.price > 0:
+            twelve_month_price = monthly_plan.price * 12
+            if twelve_month_price > yearly_plan.price:
+                savings = twelve_month_price - yearly_plan.price
+                discount_percent = round((savings / twelve_month_price) * 100)
+
+        displayable_tiers.append({
+            'tier_name': tier_name,
+            'monthly_plan': monthly_plan,
+            'yearly_plan': yearly_plan,
+            'yearly_discount_percent': discount_percent,
+            'features': data.get('features', []),
+            'display_order': data.get('display_order', 0),
+            'effective_monthly_price': effective_monthly_price
+        })
+
+    displayable_tiers.sort(key=lambda x: (x['display_order'], x['tier_name']))
+
+    first_available_yearly_discount = 0
+    for tier_data in displayable_tiers:
+        if tier_data.get('yearly_plan') and tier_data.get('yearly_discount_percent', 0) > 0:
+            first_available_yearly_discount = tier_data['yearly_discount_percent']
+            break
+
+    print(f"--- DEBUG: Number of displayable_tiers being sent to template: {len(displayable_tiers)} ---")
+
     context = {
-        'plans': plans,
-        'stripe_publishable_key': settings.STRIPE_PUBLISHABLE_KEY
+        'plan_tiers': displayable_tiers,
+        'stripe_publishable_key': settings.STRIPE_PUBLISHABLE_KEY,
+        'current_billing_preference': request.COOKIES.get('billingPreference', 'month'),
+        'first_available_yearly_discount': first_available_yearly_discount,
     }
     return render(request, 'subscriptions/plan_selection.html', context)
 
@@ -143,6 +204,28 @@ def stripe_webhook_view(request):
     sig_header = request.headers.get('stripe-signature')
     endpoint_secret = settings.STRIPE_WEBHOOK_SECRET
     event = None
+
+        # --- START: ADD THIS DEBUG PRINT AT THE VERY BEGINNING ---
+    view_actual_webhook_secret = "STRIPE_WEBHOOK_SECRET_NOT_FOUND_IN_SETTINGS" # Default
+    try:
+        view_actual_webhook_secret = settings.STRIPE_WEBHOOK_SECRET
+        if view_actual_webhook_secret and isinstance(view_actual_webhook_secret, str) and len(view_actual_webhook_secret) > 20:
+            print(f"DEBUG WEBHOOK VIEW: Function is using STRIPE_WEBHOOK_SECRET that starts with '{view_actual_webhook_secret[:15]}' and ends with '{view_actual_webhook_secret[-5:]}'.")
+        else:
+            print(f"DEBUG WEBHOOK VIEW: STRIPE_WEBHOOK_SECRET from settings appears short or invalid: '{str(view_actual_webhook_secret)[:100]}'")
+    except AttributeError:
+        print(f"DEBUG WEBHOOK VIEW: settings.STRIPE_WEBHOOK_SECRET is not defined at all!")
+    except Exception as e_dbg_secret:
+        print(f"DEBUG WEBHOOK VIEW: Error accessing settings.STRIPE_WEBHOOK_SECRET: {e_dbg_secret}")
+    # --- END: ADD THIS DEBUG PRINT ---
+
+    payload = request.body
+    sig_header = request.headers.get('stripe-signature') # Standard casing used by Stripe
+    
+    # Use the secret that Django settings provides to this view
+    endpoint_secret = view_actual_webhook_secret 
+    event = None
+
 
     # Ensure API key is set for this view's Stripe calls
     stripe.api_key = settings.STRIPE_SECRET_KEY

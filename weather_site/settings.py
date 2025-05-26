@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import environ
 from pathlib import Path
 import os # Or use pathlib
 from dotenv import load_dotenv
@@ -56,7 +57,13 @@ VAPID_PUBLIC_KEY_FOR_TEMPLATE = os.getenv('VAPID_PUBLIC_KEY')
 STRIPE_PUBLISHABLE_KEY = os.getenv('STRIPE_PUBLISHABLE_KEY')
 STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY')
 STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET') # Add this line
+#STRIPE_WEBHOOK_SECRET = env('STRIPE_WEBHOOK_SECRET')
 # --- End Stripe Keys ---
+if STRIPE_WEBHOOK_SECRET and len(STRIPE_WEBHOOK_SECRET) > 20:
+    print(f"DEBUG SETTINGS.PY: STRIPE_WEBHOOK_SECRET is hardcoded to start with '{STRIPE_WEBHOOK_SECRET[:15]}' and end with '{STRIPE_WEBHOOK_SECRET[-5:]}'.")
+    print("this is stupid")
+else:
+    print(f"DEBUG SETTINGS.PY: STRIPE_WEBHOOK_SECRET is missing or too short after hardcoding attempt: '{STRIPE_WEBHOOK_SECRET}'")
 
 
 
@@ -123,6 +130,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'weather.context_processors.navbar_alerts_processor', 
             ],
         },
     },

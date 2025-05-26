@@ -1,7 +1,7 @@
-// templates/sw.js - PASTE THIS CODE INTO THIS FILE
+// templates/sw.js -
 {% load static %}
 // templates/sw.js
-const CACHE_NAME = 'weather-app-cache-v1'; // Change version to force update
+const CACHE_NAME = 'weather-app-cache-v2.1'; // Change version to force update
 const urlsToCache = [
     '/', // Cache the homepage
     "{% url 'pages:about' %}", // Cache the about page URL (Django will render this)
@@ -124,56 +124,90 @@ self.addEventListener('fetch', event => {
 });
 // Push event listener (keep existing)
 
-self.addEventListener('push', function(event) {
+self.addEventListener('push', function (event) {
     console.log('[Service Worker] Push Received.');
 
-    let notificationTitle = 'Weather Alert'; // Default
-    let notificationBody = 'New alert received!';  // Default
-    let iconPath = "{% static 'images/icons/icon-192x192.png' %}"; // Default
-    let badgePath = "{% static 'images/icons/icon-72x72.png' %}";  // Default
-    let notificationUrl = '/'; // Default
+    let pushData = {
+        head: 'Weather Alert', // Default title
+        body: 'New alert received!', // Default body
+        icon: "{% static 'images/icons/Icon_192.jpg' %}", // Default icon (ensure this path is correct)
+        badge: "{% static 'images/icons/Icon_72.jpg' %}",  // Default badge (ensure this path is correct)
+        sound: null, // Default to no sound, will be overridden by payload if present
+        url: "{% url 'pages:home' %}" // Default URL to open on click
+    };
 
     if (event.data) {
-        const rawDataString = event.data.text();
-        console.log(`[Service Worker] Push had this data (text): "${rawDataString}"`);
+        try {
+            const payloadFromServer = event.data.json(); // Parse the JSON payload from server
+            console.log('[Service Worker] Push data JSON:', payloadFromServer);
 
-        const parts = rawDataString.split('|||');
-        if (parts.length >= 2) { // Expect at least title and body
-            notificationTitle = parts[0] || notificationTitle;
-            notificationBody = parts[1] || notificationBody;
-            if (parts.length >= 3 && parts[2]) { // Icon path
-                iconPath = parts[2];
-            }
-            if (parts.length >= 4 && parts[3]) { // URL to open
-                notificationUrl = parts[3];
-            }
-        } else {
-            // If not enough parts, use the whole string as body
-            notificationBody = rawDataString || notificationBody;
+            // Override defaults with data from the payload if present
+            if (payloadFromServer.head) pushData.head = payloadFromServer.head;
+            if (payloadFromServer.body) pushData.body = payloadFromServer.body;
+            if (payloadFromServer.icon) pushData.icon = payloadFromServer.icon;
+            if (payloadFromServer.badge) pushData.badge = payloadFromServer.badge; // If you send a badge URL
+            if (payloadFromServer.sound) pushData.sound = payloadFromServer.sound; // Use sound from payload
+            if (payloadFromServer.url) pushData.url = payloadFromServer.url;
+
+        } catch (e) {
+            console.error('[Service Worker] Error parsing push data as JSON:', e);
+            // Fallback for non-JSON data, though your server sends JSON
+            const plainTextData = event.data.text();
+            if (plainTextData) pushData.body = plainTextData;
         }
     } else {
         console.log('[Service Worker] Push event had no data.');
     }
 
-    const options = {
-        body: notificationBody,
-        icon: iconPath,
-        badge: badgePath, // You can use a default or make it part of the string payload too
-        sound: "{% static 'sounds/danger.mp3' %}",
-        data: {
-            url: notificationUrl
+    const notificationTitle = pushData.head;
+    const notificationOptions = {
+        body: pushData.body,
+        icon: pushData.icon,
+        badge: pushData.badge, // For Android
+        sound: pushData.sound, // <<< Using the sound URL from your payload
+        vibrate: [200, 100, 200, 100, 200], // Optional: add a vibration pattern
+        data: { // Data to pass to notification click event
+            url: pushData.url
         }
+        // You can add other options like:
+        // tag: 'weather-alert', // Coalesces notifications with the same tag
+        // renotify: true,       // If true, will play sound/vibrate even if tag matches
     };
 
-    console.log('[Service Worker] Showing notification with Title:', notificationTitle, 'Options:', options);
-    event.waitUntil(self.registration.showNotification(notificationTitle, options));
+    console.log('[Service Worker] Final Notification Options:', notificationOptions); // For debugging
+    event.waitUntil(
+        self.registration.showNotification(notificationTitle, notificationOptions)
+    );
+
+
+    console.log('[Service Worker] Showing notification with Title:', notificationTitle, 'Options:', notificationOptions);
+    event.waitUntil(
+        self.registration.showNotification(notificationTitle, notificationOptions)
+    );
 });
 
-// Notification click listener (keep existing)
-self.addEventListener('notificationclick', function(event) {
-    // ... your existing notification click handling ...
+// Your notificationclick listener can remain largely the same:
+self.addEventListener('notificationclick', function (event) {
     console.log('[Service Worker] Notification click Received.');
     event.notification.close();
-    const urlToOpen = event.notification.data && event.notification.data.url ? event.notification.data.url : '/';
-    event.waitUntil( clients.matchAll({ type: 'window' }).then(windowClients => { for (var i = 0; i < windowClients.length; i++) { var client = windowClients[i]; if (client.url === urlToOpen && 'focus' in client) { return client.focus(); }} if (clients.openWindow) { return clients.openWindow(urlToOpen);}}) );
+
+    const urlToOpen = event.notification.data && event.notification.data.url ? event.notification.data.url : '/'; // Uses the URL from the data payload
+
+    event.waitUntil(
+        clients.matchAll({
+            type: 'window',
+            includeUncontrolled: true
+        }).then(windowClients => {
+            // ... (logic to focus existing tab or open new window to urlToOpen) ...
+            const existingClient = windowClients.find(client => {
+                return client.url === new URL(urlToOpen, self.location.origin).href && 'focus' in client;
+            });
+
+            if (existingClient) {
+                return existingClient.focus();
+            } else if (clients.openWindow) {
+                return clients.openWindow(urlToOpen);
+            }
+        })
+    );
 });

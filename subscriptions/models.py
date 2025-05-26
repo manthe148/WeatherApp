@@ -3,16 +3,47 @@ from django.conf import settings
 from accounts.models import SavedLocation # Assuming SavedLocation is in accounts.models
 
 
+
 class Plan(models.Model):
-    name = models.CharField(max_length=100, unique=True) # e.g., "Free", "Premium Monthly"
-    stripe_price_id = models.CharField(max_length=100, unique=True,
-                                       help_text="Stripe Price ID (e.g., price_ H5ggL5LP...)")
-    price = models.DecimalField(max_digits=6, decimal_places=2, default=0.00,
-                                help_text="Display price (e.g., 5.00)")
-    features = models.TextField(blank=True, help_text="Optional description of features")
+    BILLING_INTERVAL_CHOICES = [
+        ('month', 'Monthly'),
+        ('year', 'Yearly'),
+    ]
+
+    name = models.CharField(max_length=100, unique=True) # e.g., "Premium Monthly", "Premium Yearly"
+    stripe_price_id = models.CharField(
+        max_length=100, unique=True,
+        help_text="Stripe Price ID (e.g., price_H5ggL5LP...)"
+    )
+    price = models.DecimalField(
+        max_digits=6, decimal_places=2, default=0.00,
+        help_text="Display price (e.g., 5.00 for this interval)"
+    )
+    billing_interval = models.CharField(
+        max_length=10,
+        choices=BILLING_INTERVAL_CHOICES,
+        default='month',
+        help_text="The billing frequency (e.g., month or year)"
+    )
+    tier_name = models.CharField(
+        max_length=50,
+        default="Default", # e.g., "Basic", "Premium", "Pro"
+        help_text="A common name for this plan tier (e.g., 'Premium') to group monthly/yearly versions."
+    )
+    features = models.TextField(
+        blank=True, 
+        help_text="Optional description of features (use line breaks for bullets)"
+    )
+    display_order = models.IntegerField(
+        default=0,
+        help_text="Order in which to display plan tiers (lower numbers first)"
+    )
 
     def __str__(self):
-        return self.name
+        return f"{self.tier_name} - {self.name} ({self.get_billing_interval_display()})"
+
+    class Meta:
+        ordering = ['display_order', 'tier_name', 'billing_interval']
 
 class Subscription(models.Model):
     # Possible subscription statuses from Stripe

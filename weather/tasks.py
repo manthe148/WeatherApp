@@ -110,10 +110,10 @@ def automated_nam_plot_generation(*args, **kwargs): # Accept args for scheduler
     # NAM forecast hours: Hourly out to F36, then 3-hourly out to F84 for awphys products.
     # Let's generate a selection: e.g., F00, F01, F02, F03, then every 3 hours.
     forecast_hours_to_generate = []
-#    for h in range(0, 37): # Hourly from 00 to 36
-#        forecast_hours_to_generate.append(f"{h:02d}")
-#    for h in range(39, 85, 3): # 3-hourly from 39 to 84
-#        forecast_hours_to_generate.append(f"{h:02d}")
+    for h in range(0, 37): # Hourly from 00 to 36
+        forecast_hours_to_generate.append(f"{h:02d}")
+    for h in range(39, 85, 3): # 3-hourly from 39 to 84
+        forecast_hours_to_generate.append(f"{h:02d}")
     # Remove duplicates if any and sort (though above logic should be fine)
     # forecast_hours_to_generate = sorted(list(set(forecast_hours_to_generate)))
 
@@ -128,7 +128,7 @@ def automated_nam_plot_generation(*args, **kwargs): # Accept args for scheduler
            'output_file_prefix': 'nam_refc', 
            'plot_title_param_name': 'Sim. Comp. Reflectivity',
            'plot_unit_label': 'Reflectivity (dBZ)', 
-           'plot_cmap': 'jet', 
+           'plot_cmap': 'gist_ncar', 
            'plot_levels': list(range(5, 76, 5)) if np is None else np.arange(5, 76, 5),
            'needs_conversion_to_F': False 
         },
