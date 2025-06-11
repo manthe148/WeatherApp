@@ -26,8 +26,34 @@ urlpatterns = [
         name='logout'
     ),
 
+    path(
+        'delete_account/',
+        views.delete_account_confirm_view,
+        name='delete_account_confirm'
+    ),
+    path(
+        'delete_account/perform/',
+        views.delete_account_perform_view,
+        name='delete_account_perform'
+    ),
+
+
     # Include built-in auth URLs (login, logout, password_reset, etc.)
     # These URLs won't use the 'accounts' namespace automatically
     # but rely on global names like 'login', 'logout'.
     path('', include('django.contrib.auth.urls')),
+
+    path('accept-invitation/<uuid:token>/', views.accept_invitation_view, name='accept_invitation'),
+
+    path('update_location/', views.update_location_view, name='update_location'),
+
+    path('family-map/', views.family_map_view, name='family_map'),
+
+    path('api/family-locations/', views.family_locations_api_view, name='family_locations_api'),
+
+    path('family/remove/<int:member_id>/', views.remove_family_member_view, name='remove_family_member'),
+
+    path('family/leave/', views.leave_family_view, name='leave_family'),
+
+    path('api/should-track-location/', views.should_track_location_view, name='should_track_location'),
 ]

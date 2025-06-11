@@ -14,7 +14,8 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import environ  # For reading .env file and managing environment variables
 import os
 from pathlib import Path
-from dotenv import load_dotenv
+
+
 
 # Initialize django-environ at the TOP
 # Define all environment variables with their types and default values.
@@ -23,6 +24,7 @@ env = environ.Env(
     DJANGO_DEBUG=(bool, True),  # Default to True for dev if not set in .env
     DJANGO_SECRET_KEY=(str, 'your_default_fallback_secret_key_CHANGE_ME_IN_DOT_ENV'),
     DJANGO_ALLOWED_HOSTS=(list, ['127.0.0.1', 'localhost', 'unfortunateneighbor.com']), # Default for dev
+    DJANGO_EMAIL_BACKEND=(str, 'django.core.mail.backends.console.EmailBackend'),
     DATABASE_NAME=(str, 'radar_site_prod_db'),
     DATABASE_USER=(str, 'radar_site_prod'),
     DATABASE_PASSWORD=(str, 'YOUR_DB_PASSWORD_MUST_BE_IN_DOT_ENV'),
@@ -30,23 +32,13 @@ env = environ.Env(
     DATABASE_PORT=(str, '5432'),
     # Alternatively, define DATABASE_URL in .env and use DATABASES = {'default': env.db()} below
 
-    DJANGO_EMAIL_BACKEND=(str, 'django.core.mail.backends.console.EmailBackend'), # Default was console
-    DJANGO_EMAIL_HOST=(str, ''),
-    DJANGO_EMAIL_PORT=(int, 587),
-    DJANGO_EMAIL_USE_TLS=(bool, True), 
-    DJANGO_EMAIL_USE_SSL=(bool, False),
-    DJANGO_EMAIL_HOST_USER=(str, ''),
-    DJANGO_EMAIL_HOST_PASSWORD=(str, ''),
-    DJANGO_DEFAULT_FROM_EMAIL=(str, 'webmaster@localhost'),
-
-
     STRIPE_PUBLISHABLE_KEY=(str, ''), 
     STRIPE_SECRET_KEY=(str, ''),
     STRIPE_WEBHOOK_SECRET=(str, ''),
     
-#    VAPID_PUBLIC_KEY=(str, ''),
-#    VAPID_ADMIN_EMAIL=(str, 'default_admin@example.com'), # Used in PUSH_NOTIFICATIONS_SETTINGS
-#    VAPID_PRIVATE_KEY=(str, ''),
+    VAPID_PUBLIC_KEY=(str, ''),
+    VAPID_ADMIN_EMAIL=(str, 'default_admin@example.com'), # Used in PUSH_NOTIFICATIONS_SETTINGS
+    VAPID_PRIVATE_KEY=(str, ''),
 
     SITE_DOMAIN=(str, 'http://127.0.0.1:8000'),
     CSRF_TRUSTED_ORIGINS_ENV=(list, ['http://127.0.0.1:8000', 'http://localhost:8000', 'https://unfortunateneighbor.com']), # For CSRF
@@ -55,6 +47,9 @@ env = environ.Env(
     SITE_DEFAULT_LATITUDE=(float, 36.44),
     SITE_DEFAULT_LONGITUDE=(float, -95.28),
     SITE_DEFAULT_NAME=(str, "Adair, OK (Site Default)")
+
+    
+
 )
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -92,46 +87,18 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'mediafiles_prod') # Using 'mediafiles_prod' for clarity in production
 
 
-# ... other settings like SECRET_KEY, DEBUG, ALLOWED_HOSTS ...
-VAPID_PUBLIC_KEY_FOR_TEMPLATE = os.getenv('VAPID_PUBLIC_KEY')
-
-# --- DEBUG PRINT for VAPID Keys from .env ---
-_vapid_admin_email_from_env = os.getenv('VAPID_ADMIN_EMAIL')
-_vapid_private_key_from_env = os.getenv('VAPID_PRIVATE_KEY')
-_vapid_public_key_from_env = os.getenv('VAPID_PUBLIC_KEY') # For VAPID_PUBLIC_KEY_FOR_TEMPLATE
-
-
+# --- Push Notifications Settings (VAPID) ---
+VAPID_PUBLIC_KEY_FOR_TEMPLATE = env('VAPID_PUBLIC_KEY') # Used in your template
 PUSH_NOTIFICATIONS_SETTINGS = {
-    # This "WP_CLAIMS" key is what django-push-notifications typically looks for.
     "WP_CLAIMS": {
-        "sub": f"mailto:{os.getenv('VAPID_ADMIN_EMAIL')}"
+        "sub": f"mailto:{env('VAPID_ADMIN_EMAIL')}"
     },
-    # The VAPID_PRIVATE_KEY should be at this level or the library might
-    # also look for it globally as settings.VAPID_PRIVATE_KEY.
-    # For django-push-notifications, it often expects it here:
-    "WP_PRIVATE_KEY": os.getenv("VAPID_PRIVATE_KEY"),
-
-    # Note: The VAPID_PUBLIC_KEY is not directly used by the backend for SENDING pushes.
-    # It's used by the frontend to subscribe. pywebpush (used by django-push-notifications)
-    # primarily needs the private key and the 'sub' claim for sending.
+    "VAPID_PRIVATE_KEY": env("VAPID_PRIVATE_KEY"),
+    # "VAPID_PUBLIC_KEY": env("VAPID_PUBLIC_KEY"), # Often passed to frontend, not directly used by django-push-notifications backend for sending
 }
 
-# ... other settings like SECRET_KEY, DEBUG, ALLOWED_HOSTS ...
-VAPID_PUBLIC_KEY_FOR_TEMPLATE = os.getenv('VAPID_PUBLIC_KEY')
-
-# settings.py
-MAPBOX_ACCESS_TOKEN = env('MAPBOX_ACCESS_TOKEN')
-
-#--- Email ---
 EMAIL_BACKEND = env('DJANGO_EMAIL_BACKEND')
-EMAIL_HOST = env('DJANGO_EMAIL_HOST')
-EMAIL_PORT = env('DJANGO_EMAIL_PORT')
-EMAIL_USE_TLS = env.bool('DJANGO_EMAIL_USE_TLS')
-EMAIL_USE_SSL = env.bool('DJANGO_EMAIL_USE_SSL')
-EMAIL_HOST_USER = env('DJANGO_EMAIL_HOST_USER')
-EMAIL_HOST_PASSWORD = env('DJANGO_EMAIL_HOST_PASSWORD')
-DEFAULT_FROM_EMAIL = env('DJANGO_DEFAULT_FROM_EMAIL')
-SERVER_EMAIL = env('DJANGO_DEFAULT_FROM_EMAIL') 
+
 
 
 # --- Stripe API Keys ---
@@ -156,8 +123,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'pages',
     'weather.apps.WeatherConfig',
-#    'accounts',
-    'accounts.apps.AccountsConfig',
+    'accounts',
     'django_extensions',
     'subscriptions',
     'push_notifications', # This should be the app name for django-push-notifications
@@ -264,7 +230,7 @@ SITE_DOMAIN = env('SITE_DOMAIN')
 
 CSRF_COOKIE_SECURE = env.bool('DJANGO_CSRF_COOKIE_SECURE')
 SESSION_COOKIE_SECURE = env.bool('DJANGO_SESSION_COOKIE_SECURE')
-#SECURE_SSL_REDIRECT = env.bool('DJANGO_SECURE_SSL_REDIRECT') 
+SECURE_SSL_REDIRECT = env.bool('DJANGO_SECURE_SSL_REDIRECT') 
 
 
-
+print(f"FINAL DEBUG SETTING IS: {DEBUG}")

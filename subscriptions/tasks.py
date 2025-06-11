@@ -83,139 +83,163 @@ def fetch_alerts_by_zone_or_point(zone_id, latitude, longitude, task_user_agent)
         traceback.print_exc()
     return []
 
-# --- Main Background Task Function ---
 def check_weather_alerts_and_send_pushes():
     start_time = datetime.now(timezone.utc)
-    print(f"[{start_time.isoformat()}] Running task: check_weather_alerts_and_send_pushes")
+    print(f"[{start_time.isoformat()}] TASK_INFO: Running task: check_weather_alerts_and_send_pushes")
 
-    admin_email_for_ua = "default_admin@example.com" # Fallback email
-    try:
-        # Ensure PUSH_NOTIFICATIONS_SETTINGS and its keys exist
-        if hasattr(settings, 'PUSH_NOTIFICATIONS_SETTINGS') and \
-           settings.PUSH_NOTIFICATIONS_SETTINGS.get("WP_CLAIMS") and \
-           settings.PUSH_NOTIFICATIONS_SETTINGS["WP_CLAIMS"].get("sub"):
-            admin_email_for_ua = settings.PUSH_NOTIFICATIONS_SETTINGS["WP_CLAIMS"]["sub"]
-        else:
-            print("  Warning: VAPID admin email not found in settings, using fallback for User-Agent.")
-    except Exception as e:
-        print(f"  Error accessing VAPID email from settings: {e}. Using fallback.")
+    admin_email_for_ua = getattr(settings, 'VAPID_ADMIN_EMAIL', "default_admin@example.com")
+    if admin_email_for_ua.startswith("mailto:"): # Strip mailto if present from PUSH_NOTIFICATIONS_SETTINGS
+        admin_email_for_ua = admin_email_for_ua[len("mailto:"):]
     
-    task_user_agent = f'MyWeatherApp/1.0 (AlertCheckerTask, {admin_email_for_ua})'
+    app_name_display = getattr(settings, 'APP_NAME_DISPLAY', 'MyWeatherApp') 
+    task_user_agent = f'{app_name_display}/1.0 (AlertCheckerTaskContact; {admin_email_for_ua})'
 
-    # Get users with active subscriptions (or superusers) and active push devices
     users_to_check = User.objects.filter(
         Q(subscription__status__in=['active', 'trialing']) | Q(is_superuser=True),
-        webpushdevice__active=True
+        webpushdevice__active=True # Ensures user has at least one active push device
     ).distinct().prefetch_related(
-        'profile__saved_locations', # Assumes Profile is related to User as 'profile'
-        'webpushdevice_set',        # Default related_name for ForeignKey from WebPushDevice to User
-        'subscription'              # Assumes Subscription is related to User as 'subscription'
+        'profile__saved_locations', 
+        'webpushdevice_set',      
+        'subscription'            
     )
 
-    print(f"Found {users_to_check.count()} user(s) to check for alerts.")
+    print(f"TASK_INFO: Found {users_to_check.count()} user(s) with active push devices to check for alerts.")
 
     for user in users_to_check:
-        print(f"\nProcessing user: {user.username}")
+        print(f"\nTASK_INFO: Processing user: {user.username} (ID: {user.id})")
         
         is_subscriber = user.is_superuser
-        if not is_subscriber: # Check subscription only if not superuser
+        if not is_subscriber:
             try:
-                # Check if subscription attribute exists AND the subscription object itself is not None
                 if hasattr(user, 'subscription') and user.subscription and user.subscription.is_active():
                     is_subscriber = True
-            except Subscription.DoesNotExist: # Or Profile.DoesNotExist if subscription is on Profile
-                pass # is_subscriber remains False
+            except Subscription.DoesNotExist:
+                pass 
+            except AttributeError: # If user.subscription doesn't exist
+                print(f"  TASK_WARNING: User {user.username} has no 'subscription' attribute.")
             except Exception as e_sub_check:
-                print(f"  Error checking subscription status for {user.username}: {e_sub_check}")
+                print(f"  TASK_ERROR: Error checking subscription status for {user.username}: {e_sub_check}")
 
-
-        print(f"  User is_subscriber: {is_subscriber}")
-
+        print(f"  TASK_INFO: User {user.username} is_subscriber status: {is_subscriber}")
         locations_to_monitor = []
-
-       
-        if hasattr(user, 'profile'):
+        
+        if hasattr(user, 'profile') and user.profile:
             if is_subscriber:
-                # Premium users: get all their saved locations, THEN filter by receive_notifications
                 locations_to_monitor = user.profile.saved_locations.filter(receive_notifications=True).order_by('pk')[:3]
-                print(f"  Subscriber: Checking {locations_to_monitor.count()} saved locations set for notifications (max 3).")
-            else: # Free user
-                # Free users: only check their default location IF it's set to receive notifications
+                print(f"  TASK_INFO: Subscriber {user.username}: Checking {locations_to_monitor.count()} saved locations set for notifications (max 3).")
+            else: 
                 default_loc = user.profile.saved_locations.filter(is_default=True, receive_notifications=True).first()
                 if default_loc:
                     locations_to_monitor = [default_loc]
-                    print(f"  Free tier: Checking default location (alerts ON): {default_loc.location_name}")
+                    print(f"  TASK_INFO: Free tier user {user.username}: Checking default location (alerts ON): {default_loc.location_name}")
                 else:
-                    print(f"  Free tier/Non-subscriber: User has no default location set for notifications.")
-
+                    print(f"  TASK_INFO: Free tier user {user.username}: No default location set for notifications.")
+        else:
+            print(f"  TASK_WARNING: User {user.username} has no profile or profile attribute.")
 
         if not locations_to_monitor:
-            print(f"  No locations to monitor for {user.username}.")
+            print(f"  TASK_INFO: No locations to monitor for {user.username}.")
             continue
 
-        user_devices = user.webpushdevice_set.filter(active=True)
-        if not user_devices.exists():
-            print(f"  User {user.username} has no active push devices. Skipping.")
+        user_devices = user.webpushdevice_set.filter(active=True) # Get active devices again, just in case
+        if not user_devices.exists(): # Should have been caught by initial users_to_check query, but good to double check
+            print(f"  TASK_INFO: User {user.username} has no active push devices (re-checked). Skipping.")
             continue
 
         nws_alerts_pushed_this_session_for_user = set()
 
-        for loc_instance in locations_to_monitor: # Changed variable name from 'loc'
-            print(f"  Checking location: {loc_instance.location_name} ({loc_instance.latitude}, {loc_instance.longitude})")
+        for loc_instance in locations_to_monitor:
+            print(f"  TASK_INFO: Checking location: {loc_instance.location_name} (Lat: {loc_instance.latitude}, Lon: {loc_instance.longitude}) for user {user.username}")
             
             zone_id = get_nws_zone_for_coords(loc_instance.latitude, loc_instance.longitude, task_user_agent)
             current_nws_alerts = fetch_alerts_by_zone_or_point(zone_id, loc_instance.latitude, loc_instance.longitude, task_user_agent)
 
             if not current_nws_alerts:
-                print(f"    No active alerts for {loc_instance.location_name} (zone/point).")
-                continue # To the next saved location for this user
+                print(f"    TASK_INFO: No active NWS alerts for {loc_instance.location_name}.")
+                continue 
 
             for alert in current_nws_alerts:
                 nws_alert_id = alert.get('id')
                 if not nws_alert_id:
-                    print("    Skipping alert with no ID.")
-                    continue # To the next alert
+                    print("    TASK_WARNING: Skipping alert with no ID.")
+                    continue 
 
                 if nws_alert_id in nws_alerts_pushed_this_session_for_user:
-                    print(f"    NWS ID {nws_alert_id} (event: {alert.get('event')}) already processed for {user.username} in this run (for another of their locations).")
-                    continue # To the next alert
+                    print(f"    TASK_INFO: NWS ID {nws_alert_id} (event: {alert.get('event')}) already processed for {user.username} in this run for another of their locations.")
+                    continue 
 
                 if NotifiedAlert.objects.filter(user=user, nws_alert_id=nws_alert_id).exists():
-                    print(f"    Alert {nws_alert_id} (event: {alert.get('event')}) already notified to {user.username} previously.")
-                    continue # To the next alert
+                    print(f"    TASK_INFO: Alert {nws_alert_id} (event: {alert.get('event')}) already notified to {user.username} previously.")
+                    continue 
                 
-                print(f"    NEW NWS Alert for {user.username}: {alert['event']} (for saved location: {loc_instance.location_name})")
+                print(f"    TASK_INFO: NEW NWS Alert for {user.username}: {alert.get('event')} (ID: {nws_alert_id}) for saved location: {loc_instance.location_name}")
                 
-                payload_dict = {
-                    "head": f"{alert.get('event')} for your location: {loc_instance.location_type_label or loc_instance.location_name}",
-                    "body": alert.get('headline', 'Check app for details.'),
-                    "icon": "/static/images/icons/Icon_192.png", # Ensure this static path is correct
-                    "url": "https://unfortunateneighbor.com/weather/",
-                    "sound": "/static/sounds/danger.mp3"
-                }
-                json_string_payload = json.dumps(payload_dict) # Pre-serialize
+                click_url = "/weather/" 
+                try:
+                    # Ensure SITE_DOMAIN in settings.py is like "https://yourdomain.com" (no trailing slash)
+                    click_url = f"{settings.SITE_DOMAIN.rstrip('/')}{reverse('weather:weather_page')}" # Ensure no double slashes
+                except Exception as e_url:
+                    print(f"    TASK_ERROR: Could not reverse 'weather:weather_page' URL for push: {e_url}. Using fallback URL '/'.")
 
-                print(f"SERVER_PUSH_DEBUG: Sending payload: {json_string_payload}")
-                print(f"    Attempting to send push: {json_string_payload}")
+                payload_dict = {
+                    "head": f"{alert.get('event')} for: {loc_instance.location_type_label or loc_instance.location_name}",
+                    "body": alert.get('headline', 'Check app for details.'),
+                    "icon": settings.STATIC_URL.rstrip('/') + "/images/icons/Icon_192.png", 
+                    "url": click_url,
+                    "sound": settings.STATIC_URL.rstrip('/') + "/sounds/danger.mp3"  
+                }
+                json_string_payload = json.dumps(payload_dict)
+
+                print(f"    TASK_INFO: Attempting to send push to {user.username} with payload: {json_string_payload}")
+
+                # --- START: DEBUG BLOCK TO CHECK PUSH_NOTIFICATIONS_SETTINGS ---
+                task_push_settings_dict_at_runtime = "PUSH_NOTIFICATIONS_SETTINGS_NOT_FOUND_ON_SETTINGS_OBJECT_IN_TASK"
+                private_key_val_at_runtime = "PRIVATE_KEY_NOT_CHECKED_OR_FOUND_IN_TASK"
+                
+                print(f"    TASK_EXECUTION_DEBUG: --- Entering PUSH_NOTIFICATIONS_SETTINGS check in task for user {user.username} ---")
+                if hasattr(settings, 'PUSH_NOTIFICATIONS_SETTINGS'):
+                    task_push_settings_dict_at_runtime = settings.PUSH_NOTIFICATIONS_SETTINGS
+                    print(f"    TASK_EXECUTION_DEBUG: settings.PUSH_NOTIFICATIONS_SETTINGS IS available to task.")
+                    print(f"    TASK_EXECUTION_DEBUG: Type of settings.PUSH_NOTIFICATIONS_SETTINGS: {type(task_push_settings_dict_at_runtime)}")
+                    print(f"    TASK_EXECUTION_DEBUG: Full settings.PUSH_NOTIFICATIONS_SETTINGS dict as seen by task: {task_push_settings_dict_at_runtime}") 
+                    
+                    if isinstance(task_push_settings_dict_at_runtime, dict):
+                        if "VAPID_PRIVATE_KEY" in task_push_settings_dict_at_runtime: # Check for exact key string
+                            private_key_val_at_runtime = task_push_settings_dict_at_runtime.get("VAPID_PRIVATE_KEY")
+                            print(f"    TASK_EXECUTION_DEBUG: 'VAPID_PRIVATE_KEY' key IS IN dict. Value starts with: {str(private_key_val_at_runtime)[:20] if private_key_val_at_runtime else 'EMPTY or None'}")
+                        else:
+                            print(f"    TASK_EXECUTION_DEBUG: 'VAPID_PRIVATE_KEY' KEY IS MISSING from PUSH_NOTIFICATIONS_SETTINGS dict when checked by task!")
+                    else:
+                        print(f"    TASK_EXECUTION_DEBUG: settings.PUSH_NOTIFICATIONS_SETTINGS is not a dictionary when checked by task!")
+                else:
+                    print(f"    TASK_EXECUTION_DEBUG: settings.PUSH_NOTIFICATIONS_SETTINGS attribute itself IS MISSING when checked by task!")
+                print(f"    TASK_EXECUTION_DEBUG: --- Finished PUSH_NOTIFICATIONS_SETTINGS check in task ---")
+                # --- END: DEBUG BLOCK ---
 
                 try:
-                    user_devices.send_message(json_string_payload) # Send pre-serialized JSON string
+                    # This is line 246 from your traceback in message #200
+                    user_devices.send_message(json_string_payload) 
+                    
                     NotifiedAlert.objects.create(
                         user=user,
                         nws_alert_id=nws_alert_id,
-                        saved_location=loc_instance # Link the specific location that triggered it
+                        saved_location=loc_instance 
                     )
-                    print(f"      Push sent and DB record created for {user.username}, NWS ID {nws_alert_id} (Location: {loc_instance.location_name})")
-                    nws_alerts_pushed_this_session_for_user.add(nws_alert_id) # Mark as processed for this run
-                except Exception as e:
-                    print(f"    !!! FAILED to send push to {user.username} for NWS ID {nws_alert_id}: {e}")
-                    traceback.print_exc()
-            
-        print(f"  Finished processing locations for {user.username}")
+                    print(f"      TASK_SUCCESS: Push sent and DB record created for {user.username}, NWS ID {nws_alert_id} (Location: {loc_instance.location_name})")
+                    nws_alerts_pushed_this_session_for_user.add(nws_alert_id)
+                except Exception as e_send_message:
+                    print(f"    TASK_ERROR: !!! FAILED to send push to {user.username} for NWS ID {nws_alert_id}: {e_send_message}")
+                    print(f"    --- Traceback for push sending failure IN TASK (NWS ID: {nws_alert_id}): ---")
+                    traceback.print_exc() # This prints the full traceback for the error
+                    print(f"    --- End traceback for push sending failure IN TASK (NWS ID: {nws_alert_id}) ---")
+        
+        print(f"  TASK_INFO: Finished processing locations for {user.username}")
 
     end_time = datetime.now(timezone.utc)
-    print(f"[{end_time.isoformat()}] Task finished. Duration: {end_time - start_time}")
+    print(f"[{end_time.isoformat()}] TASK_INFO: Task finished. Duration: {end_time - start_time}")
 
+
+#####################################################################################
 def fetch_and_determine_alert_priority_for_navbar(latitude, longitude):
     """
     Fetches NWS alerts for a point and determines the highest priority status.
@@ -323,3 +347,5 @@ def get_user_navbar_alert_info(user):
 
     cache.set(cache_key, alert_info_to_cache, 60 * 10) # Cache for 10 minutes
     return alert_info_to_cache
+
+

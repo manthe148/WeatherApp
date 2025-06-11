@@ -21,6 +21,12 @@
     {# Link to an icon for iOS home screen bookmark #}
     <link rel="apple-touch-icon" href="{% static 'images/icons/icon-192x192.png' %}">
 
+    {% block extra_head %}
+    {% endblock extra_head %}
+    {# --- END BLOCK --- #}
+
+
+
 </head>
 <body>
     <header>
@@ -41,29 +47,29 @@
             <li class="nav-item">
              {% if user.is_authenticated and navbar_alert_info.status %}
                  {% if navbar_alert_info.status == 'warning' %}
-                     <a class="nav-link fw-bold text-danger" id="alerts" href="{% url 'weather:weather_page' %}" title="Active Warning(s)!">
+                     <a class="nav-link fw-bold text-danger" href="{% url 'weather:weather_page' %}" title="Active Warning(s)!">
                          Alerts
                          {% if navbar_alert_info.count > 0 %}<span class="badge bg-danger rounded-pill ms-1">{{ navbar_alert_info.count }}</span>{% endif %}
                          {# Optional: Add an icon here if you use an icon library #}
                          {# e.g., <i class="bi bi-exclamation-triangle-fill"></i> #}
                      </a>
                  {% elif navbar_alert_info.status == 'watch' %}
-                     <a class="nav-link fw-bold text-warning" id="alerts" href="{% url 'weather:weather_page' %}" title="Active Watch(es)">
+                     <a class="nav-link fw-bold text-warning" href="{% url 'weather:weather_page' %}" title="Active Watch(es)">
                          Alerts
                          {% if navbar_alert_info.count > 0 %}<span class="badge bg-warning rounded-pill ms-1 text-dark">{{ navbar_alert_info.count }}</span>{% endif %}
                          {# Optional: <i class="bi bi-exclamation-octagon-fill"></i> #}
                      </a>
                  {% elif navbar_alert_info.status == 'advisory' %}
-                     <a class="nav-link text-info" id="alerts" href="{% url 'weather:weather_page' %}" title="Active Advisory/Statement(s)">
+                     <a class="nav-link text-info" href="{% url 'weather:weather_page' %}" title="Active Advisory/Statement(s)">
                          Alerts
                          {% if navbar_alert_info.count > 0 %}<span class="badge bg-info rounded-pill ms-1 text-dark">{{ navbar_alert_info.count }}</span>{% endif %}
                          {# Optional: <i class="bi bi-info-circle-fill"></i> #}
                      </a>
                  {% else %} {# Should only happen if status is None but count > 0, or if status is an unhandled string #}
-                      <a class="nav-link" id="alerts" href="{% url 'weather:weather_page' %}">Alerts{% if navbar_alert_info.count > 0 %} ({{ navbar_alert_info.count }}){% endif %}</a>
+                      <a class="nav-link" href="{% url 'weather:weather_page' %}">Alerts{% if navbar_alert_info.count > 0 %} ({{ navbar_alert_info.count }}){% endif %}</a>
                  {% endif %}
              {% else %} {# Not authenticated or no alerts with a status #}
-                 <a class="nav-link" id="alerts" href="{% url 'weather:weather_page' %}">Alerts</a>
+                 <a class="nav-link" href="{% url 'weather:weather_page' %}">Alerts</a>
              {% endif %}
             </li>
         {# END: MODIFIED DYNAMIC ALERTS NAV ITEM #}
@@ -78,7 +84,11 @@
                 <a class="nav-link" href="{% url 'subscriptions:plan_selection' %}">Plans</a>
              </li>
              <li class="nav-item">
-                <a class="nav-link" href="{% url 'weather:premium_radar' %}">Premium Radar</a>
+                {% if is_family_owner or is_family_member %}
+             <li class="nav-item">
+                 <a href="{% url 'accounts:family_map' %}" class="btn btn-primary">View Family Map</a>
+             </li>
+             {% endif %}
              </li>
              <li class="nav-item"> {# <-- ADD THIS NEW LIST ITEM --> #}
                 <a class="nav-link" href="{% url 'weather:weather_models_landing' %}">Weather Models</a>
@@ -113,7 +123,7 @@
       </div>
     </nav>
     </header>
-
+//
     <main class='container mt-4 mb-4'>
         {# --- NEW: Site Announcement Display --- #}
         {% if request.site_announcement_to_display %}

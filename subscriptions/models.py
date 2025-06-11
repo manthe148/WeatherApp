@@ -39,6 +39,10 @@ class Plan(models.Model):
         help_text="Order in which to display plan tiers (lower numbers first)"
     )
 
+    is_purchasable = models.BooleanField(default=True, help_text="Can users currently subscribe to this plan?")
+    # You might also want an 'is_visible' field if you sometimes want to hide it entirely
+    is_visible_on_page = models.BooleanField(default=True, help_text="Should this plan be shown on the plan selection page?")
+
     def __str__(self):
         return f"{self.tier_name} - {self.name} ({self.get_billing_interval_display()})"
 

@@ -60,6 +60,9 @@ db.sqlite3
 db.sqlite3-journal
 media/ # User-uploaded files
 staticfiles/ # Directory for collectstatic output (if used)
+/staticfiles_prod/
+/mediafiles_prod/
+
 
 # Virtualenv
 venv/
@@ -90,3 +93,7 @@ gfs_temp_data_*.grb2
 
 # Keep your existing ignores
 media/model_plots/
+.env
+.save
+create_new_vapid_pair.py
+generate_new_vapid_keys.py

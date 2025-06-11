@@ -1,0 +1,1 @@
+You're invited to join the {{ family_name }} on {{ site_name }}!

@@ -25,7 +25,7 @@ def automated_gfs_plot_generation(*args, **kwargs): # Added *args, **kwargs
 
     run_date_str, model_run_hour_str = get_latest_gfs_rundate_and_hour(print)
 
-    forecast_hours_to_generate = [f"{h:03d}" for h in range(0, 121, 6)] # e.g., F000, F006, ... F120
+    forecast_hours_to_generate = [f"{h:03d}" for h in range(0, 144, 3)] # e.g., F000, F006, ... F120
 #    forecast_hours_to_generate = ["06"]
     # --- DEFINE PARAMETERS TO PLOT ---
     parameters_to_plot = [
@@ -50,7 +50,7 @@ def automated_gfs_plot_generation(*args, **kwargs): # Added *args, **kwargs
            'output_file_prefix': 'gfs_refc', 
            'plot_title_param_name': 'Sim. Comp. Reflectivity',
            'plot_unit_label': 'Reflectivity (dBZ)', 
-           'plot_cmap': 'jet', # Or 'turbo'
+           'plot_cmap': 'turbo', # Or 'turbo'
            'plot_levels': list(range(5, 76, 5)) if np is None else np.arange(5, 76, 5),
            'needs_conversion_to_F': False
        }

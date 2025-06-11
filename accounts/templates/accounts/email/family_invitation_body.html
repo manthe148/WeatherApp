@@ -1,0 +1,19 @@
+{% autoescape off %}
+<p>Hi there,</p>
+
+<p>You've been invited by <strong>{{ inviter_name }}</strong> to join the <strong>{{ family_name }}</strong> on {{ site_name }}, your personal weather alert and forecast center.</p>
+
+<p>Joining this family plan will give you access to premium features, including up to 3 saved locations for NWS push alerts and access to all weather model plots.</p>
+
+<p>To accept the invitation and create your account (or link your existing one), please click the link below:</p>
+
+<p><a href="{{ invitation_link }}" style="display: inline-block; padding: 12px 24px; background-color: #0d6efd; color: #ffffff; text-decoration: none; border-radius: 5px; font-weight: bold;">Accept Invitation & Join Family</a></p>
+
+<p>If you can't click the link, please copy and paste the following URL into your browser:<br>
+{{ invitation_link }}</p>
+
+<p>This invitation link is unique to you and should not be shared.</p>
+
+<p>Thanks,<br />
+The {{ site_name }} Team</p>
+{% endautoescape %}

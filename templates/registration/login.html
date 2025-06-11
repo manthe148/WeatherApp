@@ -1,14 +1,85 @@
-{% extends 'base.html' %}
+{# registration/login.html #}
+{% extends "base.html" %}
+{% load static %} {# If you need any static assets specific to this page #}
 
-{% block title %}Login{% endblock %}
+{% block title %}Log In - {% endblock %}
 
 {% block content %}
-<h2>Log In</h2>
-<form method="post">
-    {% csrf_token %}
-    <div class="mb-3"> {# Add margin below form fields #}
-        {{ form.as_p }}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="mb-0 text-center">Log In</h3>
+                </div>
+                <div class="card-body p-4">
+                    {% if form.errors %}
+                        <div class="alert alert-danger" role="alert">
+                            Your username and password didn't match. Please try again.
+                        </div>
+                    {% endif %}
+
+                    {% if next %}
+                        {% if user.is_authenticated %}
+                            <p class="alert alert-warning">Your account doesn't have access to this page. To proceed,
+                            please login with an account that has access.</p>
+                        {% else %}
+                            <p class="alert alert-info">Please login to see this page.</p>
+                        {% endif %}
+                    {% endif %}
+
+                    <form method="post" action="">
+                        {% csrf_token %}
+
+                        <div class="mb-3">
+                            <label for="{{ form.username.id_for_label }}" class="form-label">{{ form.username.label_tag }}</label>
+                            <input type="{{ form.username.field.widget.input_type }}"
+                                   name="{{ form.username.name }}"
+                                   id="{{ form.username.id_for_label }}"
+                                   class="form-control form-control-lg {% if form.username.errors %}is-invalid{% endif %}"
+                                   placeholder="Username"
+                                                                      value="{{ form.username.value|default:'' }}"
+                                   required>
+                            {% if form.username.errors %}
+                                <div class="invalid-feedback">
+                                    {% for error in form.username.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ form.password.id_for_label }}" class="form-label">{{ form.password.label_tag }}</label>
+                            <input type="{{ form.password.field.widget.input_type }}"
+                                   name="{{ form.password.name }}"
+                                   id="{{ form.password.id_for_label }}"
+                                   class="form-control form-control-lg {% if form.password.errors %}is-invalid{% endif %}"
+                                   placeholder="Password"
+                                   required>
+                            {% if form.password.errors %}
+                                <div class="invalid-feedback">
+                                    {% for error in form.password.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <input type="hidden" name="next" value="{{ next|default:'' }}">
+
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary btn-lg">Log In</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="card-footer text-center py-3">
+                    {# We'll add the password reset link here later #}
+                    <p class="mb-0">Don't have an account? <a href="{% url 'accounts:signup' %}">Sign up</a></p> {# Assuming you have a signup URL #}
+                    <p class="mb-0 mt-2"><a href="{% url 'password_reset' %}">Forgot password?</a></p>
+                </div>
+            </div>
+        </div>
     </div>
-    <button type="submit" class="btn btn-primary">Log In</button>
-</form>
+</div>
 {% endblock %}

@@ -80,12 +80,14 @@ def create_customer_portal_session_view(request):
 
 
 
-@login_required
+
 def subscription_plan_view(request):
-    print("--- DEBUG: Inside subscription_plan_view ---") # Check if view is hit
+#    print("--- DEBUG: Inside subscription_plan_view ---") # Check if view is hit
 
     all_plans_qs = Plan.objects.all() # Get the queryset
-    print(f"--- DEBUG: Plan.objects.all() found {all_plans_qs.count()} plans initially. ---")
+#    print(f"--- DEBUG: Plan.objects.all() found {all_plans_qs.count()} plans initially. ---")
+
+    all_plans_qs = Plan.objects.filter(is_visible_on_page=True) # Only fetch visible plans
 
     # Your existing logic to order and process into plan_tiers/displayable_tiers
     # For example:
@@ -129,7 +131,9 @@ def subscription_plan_view(request):
             'yearly_discount_percent': discount_percent,
             'features': data.get('features', []),
             'display_order': data.get('display_order', 0),
-            'effective_monthly_price': effective_monthly_price
+            'effective_monthly_price': effective_monthly_price,
+            'is_monthly_purchasable': monthly_plan.is_purchasable if monthly_plan else False, # From Plan model
+            'is_yearly_purchasable': yearly_plan.is_purchasable if yearly_plan else False,   # From Plan model
         })
 
     displayable_tiers.sort(key=lambda x: (x['display_order'], x['tier_name']))
@@ -548,3 +552,39 @@ def save_push_subscription_view(request):
         print(f"Error saving WebPushDevice: {e}")
         traceback.print_exc()
         return JsonResponse({'status': 'error', 'message': 'Server error saving subscription.'}, status=500)
+
+
+@login_required
+@require_POST # Or allow DELETE method if your JS sends DELETE
+@csrf_exempt # If using POST and CSRF token is sent in headers, might not need this, 
+             # but service worker / JS fetch requests can be tricky with CSRF if not SPA.
+             # For API-like endpoints, session auth + CSRF header is good.
+             # If you keep @csrf_exempt, ensure your endpoint is not vulnerable.
+             # A better way is to ensure JS sends X-CSRFToken header. My JS example does.
+def delete_push_subscription_view(request):
+    try:
+        data = json.loads(request.body)
+        endpoint = data.get('endpoint')
+
+        if not endpoint:
+            return JsonResponse({'status': 'error', 'message': 'Missing endpoint.'}, status=400)
+
+        # Find and delete/deactivate the device for the current user
+        devices_deleted, _ = WebPushDevice.objects.filter(user=request.user, registration_id=endpoint).delete()
+        # Or, to deactivate:
+        # devices_updated = WebPushDevice.objects.filter(user=request.user, registration_id=endpoint).update(active=False)
+
+
+        if devices_deleted > 0: # Or devices_updated > 0 if deactivating
+            print(f"Deactivated/Deleted push device with endpoint {endpoint} for user {request.user.username}")
+            return JsonResponse({'status': 'success', 'message': 'Unsubscribed successfully.'})
+        else:
+            print(f"No active push device found with endpoint {endpoint} for user {request.user.username} to delete/deactivate.")
+            return JsonResponse({'status': 'error', 'message': 'Subscription not found or already inactive.'}, status=404)
+
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON.'}, status=400)
+    except Exception as e:
+        print(f"Error deleting push subscription: {e}")
+        traceback.print_exc()
+        return JsonResponse({'status': 'error', 'message': 'Server error during unsubscription.'}, status=500)

@@ -1,8 +1,152 @@
 {% extends 'base.html' %}
 
-{% block title %}Home - My Weather Site{% endblock %}
+{% block title %}Home{% endblock %}
 
 {% block content %}
-<h1>Homepage</h1>
-<p>Welcome!</p>
+
+<div class="container-fluid bg-light text-dark p-5 mb-5 text-center"> {# Full width, light background #}
+    <div class="container">
+        <h1 class="display-4 fw-bold">Stay Ahead of the Storm with Unfortunate Neighbor Weather</h1>
+        <p class="lead my-4">
+            Get instant NWS alerts via push notifications for your saved locations, explore detailed GFS & NAM model plots, and make informed decisions with our comprehensive weather tools.
+        </p>
+        <a href="{% url 'accounts:signup' %}" class="btn btn-success btn-lg mx-2">Sign Up for Alerts</a>
+        <a href="{% url 'subscriptions:plan_selection' %}" class="btn btn-outline-primary btn-lg mx-2">View Premium Plans</a>
+        <a href="{% url 'weather:weather_page' %}" class="btn btn-outline-secondary btn-lg mx-2">Explore Weather Data</a> 
+    </div>
+</div>
+
+<div class="container text-center mb-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="p-4 rounded" style="background-color: #f8f9fa;">
+                <h2 class="display-5 fw-bold text-success">{{ notification_count }}</h2>
+                <p class="lead text-muted">NWS Alerts Delivered to Our Users!</p>
+                <p><small>Helping you stay informed and safe.</small></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container px-4 py-5" id="featured-3">
+    <h2 class="pb-2 border-bottom text-center">Why Choose Unfortunate Neighbor Weather?</h2>
+    <div class="row g-4 py-5 row-cols-1 row-cols-lg-3">
+      
+      <div class="feature col text-center">
+        <div class="feature-icon-small d-inline-flex align-items-center justify-content-center text-bg-primary bg-gradient fs-4 rounded-3 mb-3 p-2">
+          {# Replace with your icon for alerts, e.g., from Bootstrap Icons: <i class="bi bi-bell-fill"></i> #}
+          <svg class="bi" width="1em" height="1em" fill="currentColor"><use xlink:href="#bell-fill"/></svg> 
+        </div>
+        <h3 class="fs-2 text-body-emphasis">Instant NWS Alerts</h3>
+        <p>Receive critical National Weather Service warnings, watches, and advisories via push notifications directly to your devices for locations you care about. Stay informed and safe when seconds count.</p>
+      </div>
+
+      <div class="feature col text-center">
+        <div class="feature-icon-small d-inline-flex align-items-center justify-content-center text-bg-primary bg-gradient fs-4 rounded-3 mb-3 p-2">
+          {# Replace with your icon for model plots, e.g., <i class="bi bi-graph-up-arrow"></i> #}
+          <svg class="bi" width="1em" height="1em" fill="currentColor"><use xlink:href="#graph-up-arrow"/></svg>
+        </div>
+        <h3 class="fs-2 text-body-emphasis">Detailed Model Plots</h3>
+        <p>Explore GFS and NAM forecast model data with clear visualizations for temperature, simulated reflectivity, CAPE, helicity, dew point, and more. Understand developing weather patterns to plan ahead.</p>
+      </div>
+
+      <div class="feature col text-center">
+        <div class="feature-icon-small d-inline-flex align-items-center justify-content-center text-bg-primary bg-gradient fs-4 rounded-3 mb-3 p-2">
+          {# Replace with your icon for radar, e.g., <i class="bi bi-broadcast-pin"></i> #}
+          <svg class="bi" width="1em" height="1em" fill="currentColor"><use xlink:href="#broadcast-pin"/></svg>
+        </div>
+        <h3 class="fs-2 text-body-emphasis">Advanced Radar Insights</h3>
+        <p>Access key radar-derived products like Composite Reflectivity and Echo Tops (from model data now, with live radar coming soon!). Get a clearer picture of storm structure and intensity.</p>
+      </div>
+
+    </div>
+</div>
+
+
+<div class="container marketing py-5">
+
+    {# Feature 1: NWS Alerts (Text Left, Image Right) #}
+    <hr class="featurette-divider">
+    <div class="row featurette align-items-center">
+      <div class="col-md-7">
+        <h2 class="featurette-heading fw-normal lh-1">Instant NWS Alerts. <span class="text-body-secondary">Be Prepared.</span></h2>
+        <p class="lead">
+          Receive hyper-local, timely National Weather Service alerts directly to your devices via push notification. 
+          Customize up to [X based on plan, e.g., 3 for Premium] locations to protect what matters most – home, work, or family. 
+          Stay ahead of severe weather like tornadoes, thunderstorms, floods, and winter storms with actionable information right when you need it.
+        </p>
+        {# <p><a class="btn btn-outline-primary" href="#">Learn more &raquo;</a></p> #}
+      </div>
+      <div class="col-md-5">
+        {#<img src="{% static 'images/homepage/nws_alert_feature.jpg' %}" class="img-fluid rounded mx-auto" width="500" height="400" alt="NWS Alert Notification Example">#}
+      </div>
+    </div>
+
+    {# Feature 2: Detailed Model Plots (Image Left, Text Right) #}
+    <hr class="featurette-divider">
+    <div class="row featurette align-items-center">
+      <div class="col-md-7 order-md-2"> {# order-md-2 pushes text to the right on medium+ screens #}
+        <h2 class="featurette-heading fw-normal lh-1">Explore In-Depth Model Data. <span class="text-body-secondary">See the Forecast Unfold.</span></h2>
+        <p class="lead">
+          Go beyond basic forecasts. Explore high-resolution GFS and NAM model plots for a wide range of crucial parameters: 
+          temperature, precipitation, simulated radar reflectivity, CAPE, CIN, storm relative helicity (SRH), 2m Dew Point, and more. 
+          Visualize the atmosphere to understand how storms might develop hours in advance and plan accordingly.
+        </p>
+         {# <p><a class="btn btn-outline-primary" href="{% url 'weather:weather_page' %}">View Model Plots &raquo;</a></p> #}
+      </div>
+      <div class="col-md-5 order-md-1">
+        {#<img src="{% static 'images/homepage/model_plots_feature.jpg' %}" class="img-fluid rounded mx-auto" width="500" height="400" alt="Weather Model Plot Examples">#}
+      </div>
+    </div>
+
+    {# Feature 3: Advanced Radar Insight (Text Left, Image Right) #}
+    <hr class="featurette-divider">
+    <div class="row featurette align-items-center">
+      <div class="col-md-7">
+        <h2 class="featurette-heading fw-normal lh-1">Advanced Radar Insights. <span class="text-body-secondary">Visualize Storm Structure.</span></h2>
+        <p class="lead">
+          While our live NEXRAD radar is under active development, you can gain valuable insights now with our model-derived radar products, 
+          including Composite Reflectivity and Echo Tops. Understand predicted storm structure, intensity, and precipitation types 
+          to better prepare for impactful weather.
+        </p>
+        {# <p><a class="btn btn-outline-primary" href="#">Coming Soon: Live Radar &raquo;</a></p> #}
+      </div>
+      <div class="col-md-5">
+        {#<img src="{% static 'images/homepage/radar_feature.jpg' %}" class="img-fluid rounded mx-auto" width="500" height="400" alt="Simulated Radar Example">#}
+      </div>
+    </div>
+    <hr class="featurette-divider">
+
+</div>{# End container marketing #}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="container py-5">
+    <div class="p-5 mb-4 bg-body-tertiary rounded-3 text-center">
+        <div class="container-fluid py-5">
+            <h2 class="display-5 fw-bold">Ready to Take Control of Your Weather Awareness?</h2>
+            <p class="fs-5">Sign up today to receive timely alerts and access detailed weather model data. Upgrade to premium for an enhanced experience.</p>
+            <a href="{% url 'accounts:signup' %}" class="btn btn-success btn-lg mx-2 px-4 gap-3">Get Started - Sign Up</a>
+            <a href="{% url 'subscriptions:plan_selection' %}" class="btn btn-outline-primary btn-lg mx-2 px-4">Explore Premium Plans</a>
+        </div>
+    </div>
+</div>
+
+
+
+
 {% endblock %}

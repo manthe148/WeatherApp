@@ -1,16 +1,16 @@
 version: '3.8'
 
 services:
-  db:
+  db_prod:
     image: postgres:15-alpine  # You can use a newer stable version like postgres:15 or postgres:16 if preferred
     container_name: ${COMPOSE_PROJECT_NAME:-myproject}_postgres # Makes container name unique if you set COMPOSE_PROJECT_NAME
     restart: unless-stopped
     volumes:
       - postgres_data_test:/var/lib/postgresql/data/  # Named volume for data persistence
     environment:
-      - POSTGRES_DB=myWeatherApp        # Choose a database name
-      - POSTGRES_USER=manthe148    # Choose a username
-      - POSTGRES_PASSWORD=Harry Potter and the chamber of secrets1! # CHOOSE A STRONG PASSWORD
+      POSTGRES_DB: "radar_site_prod_db"
+      POSTGRES_USER: "radar_site_prod"   # Just the name, no extra quotes around this value
+      POSTGRES_PASSWORD: "CUBbEPp6nGz94WFc7jStmM" # Just the password, no extra quotes
     ports:
       - "127.0.0.1:5432:5432" # Map to localhost only on the server for security
 

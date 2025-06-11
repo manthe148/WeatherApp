@@ -7,7 +7,6 @@
 <div class="container mt-4">
     <h2 class="mb-1" id="model-main-heading">{{ page_title_initial|default:"GFS Models" }}</h2>
     
-    {# New display for run and valid times #}
     <p class="mb-1">
         <small><strong>Run:</strong> <span id="model-run-time-display">{{ formatted_run_time_local_initial|default:"N/A" }}</span></small>
     </p>
@@ -20,10 +19,10 @@
     {# Parameter Selection #}
     <div class="mb-3">
         <strong>Parameter:</strong>
-        {% for param_opt in available_parameters %}
+        {% for param_opt in available_parameters %} {# Ensure param_opt has .code and .name #}
             <button type="button" 
-               class="btn btn-sm {% if param_opt.code == current_param_code_initial %}btn-success active{% else %}btn-outline-success{% endif %} me-1 mb-1 model-param-btn"
-               data-param-code="{{ param_opt.code }}">
+                    class="btn btn-sm {% if param_opt.code == current_param_code_initial %}btn-success active{% else %}btn-outline-success{% endif %} me-1 mb-1 model-param-btn"
+                    data-param-code="{{ param_opt.code }}">
                 {{ param_opt.name }}
             </button>
         {% endfor %}
@@ -34,14 +33,14 @@
         <label for="fhr-slider" class="form-label"><strong>Forecast Hour: <span id="fhr-slider-value-display" class="badge bg-secondary ms-1">F{{ current_fhr_initial|default:'006' }}</span></strong></label>
         <input type="range" class="form-range mt-1" 
                id="fhr-slider" 
-               min="0" max="120" step="6" 
+               min="0" max="384" step="6" {# GFS typically goes out to 384 in 3 or 6hr steps. Adjust max/step as per your available_fhrs #}
                value="{{ current_fhr_initial_int|default:6 }}">
     </div>
     <div class="mb-3">
-        {% for fhr_option in available_fhrs %}
+        {% for fhr_option in available_fhrs %} {# available_fhrs from view context #}
             <button type="button" 
-               class="btn btn-sm {% if fhr_option == current_fhr_initial %}btn-primary active{% else %}btn-outline-primary{% endif %} me-1 mb-1 forecast-hour-btn"
-               data-fhr="{{ fhr_option }}">
+                    class="btn btn-sm {% if fhr_option == current_fhr_initial %}btn-primary active{% else %}btn-outline-primary{% endif %} me-1 mb-1 forecast-hour-btn"
+                    data-fhr="{{ fhr_option }}">
                 F{{ fhr_option }}
             </button>
         {% endfor %}
@@ -58,11 +57,26 @@
 
 {% block extra_js %}
 <script>
-    const initialFHR = "{{ current_fhr_initial|default:'006' }}";
-    const initialParamCode = "{{ current_param_code_initial|default:'t2m' }}";
-    const jsApiUrl = "{{ api_url_for_js }}"; // From view context
-    const initialFormattedRunTime = "{{ formatted_run_time_local_initial|escapejs|default:'Run: N/A' }}";
-    const initialFormattedValidTime = "{{ formatted_valid_time_local_initial|escapejs|default:'Valid: N/A' }}";
+    // Standard initial values
+    const initialFHR = "{{ current_fhr_initial|default:'006'|escapejs }}";
+    const initialParamCode = "{{ current_param_code_initial|default:'t2m'|escapejs }}";
+    const jsApiUrl = "{{ api_url_for_js|escapejs }}"; // From view context e.g. reverse('weather:api_gfs_model_data')
+    const initialFormattedRunTime = "{{ formatted_run_time_local_initial|default:'Run: N/A'|escapejs }}";
+    const initialFormattedValidTime = "{{ formatted_valid_time_local_initial|default:'Valid: N/A'|escapejs }}";
+
+    // --- NEW VARIABLES REQUIRED FOR PRELOADING LOGIC (must be passed from GFS Django view) ---
+    const gfsRunDateStrGlobal = "{{ gfs_run_date_str_initial|default:''|escapejs }}";       // e.g., "YYYYMMDD"
+    const gfsModelRunHourStrGlobal = "{{ gfs_model_run_hour_str_initial|default:''|escapejs }}"; // e.g., "00", "06", "12", "18"
+    // Ensure your Django settings has MEDIA_URL configured.
+    // The path "model_plots/" is an example subdirectory within MEDIA_ROOT. Adjust if your GFS plots are elsewhere.
+    const mediaUrlModelPlotsGlobal = "{{ settings.MEDIA_URL }}model_plots/"; 
 </script>
+
+{# Using json_script for lists/objects is safer and easier to parse in JS #}
+{# Ensure 'available_fhrs' (list of strings, e.g. ["000", "003", "006"]) is in GFS view context #}
+{{ available_fhrs|json_script:"available_fhrs_data" }}
+{# Ensure 'available_parameters' (list of dicts, e.g. [{"code": "t2m", "name": "2m Temp", "output_file_prefix": "gfs_t2m_sfc"}]) is in GFS view context #}
+{{ available_parameters|json_script:"available_parameters_data" }}
+
 <script src="{% static 'weather/js/gfs_model_page.js' %}" defer></script>
 {% endblock %}

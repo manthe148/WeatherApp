@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}Delete Account Confirmation - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-7">
+            <div class="card shadow-sm border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h3 class="mb-0 text-center">Confirm Account Deletion</h3>
+                </div>
+                <div class="card-body p-4">
+                    {% if has_active_stripe_subscription %}
+                        <h4 class="text-warning">Active Subscription Found!</h4>
+                        <p>Our records indicate you have an active subscription ({{ request.user.subscription.plan.name }} - Status: {{ request.user.subscription.status }}).</p>
+                        <p><strong>To prevent further billing, you must cancel your subscription through the Stripe Billing Portal before deleting your account.</strong></p>
+                        <p>Deleting your account here will NOT automatically cancel your Stripe subscription.</p>
+                        {% if stripe_portal_url %}
+                            <a href="{{ stripe_portal_url }}" class="btn btn-info btn-lg d-block mb-3">Go to Stripe Billing Portal to Cancel</a>
+                        {% else %}
+                            <p class.text-danger>Could not generate link to Stripe portal. Please manage your subscription directly on Stripe or contact support.</p>
+                        {% endif %}
+                        <a href="{% url 'accounts:settings' %}" class="btn btn-secondary d-block">Back to Account Settings</a> {# Or your settings page URL #}
+                    {% else %}
+                        <p class="lead">Are you absolutely sure you want to permanently delete your account, <strong>{{ request.user.username }}</strong>?</p>
+                        <p class="text-danger"><strong>This action cannot be undone.</strong> All your associated data, including saved locations and preferences, will be removed.</p>
+                        <hr>
+                        <form method="post" action="{% url 'accounts:delete_account_perform' %}">
+                            {% csrf_token %}
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-danger btn-lg">Yes, Permanently Delete My Account</button>
+                                <a href="{% url 'accounts:settings' %}" class="btn btn-secondary btn-lg">No, Keep My Account</a> {# Or your settings page URL #}
+                            </div>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

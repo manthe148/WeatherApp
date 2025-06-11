@@ -1,0 +1,14 @@
+{% autoescape off %}
+Hi {{ user.username }},
+
+<p>Welcome to {{ site_name }}! We're excited to have you.</p>
+
+<p>You can now log in and explore all our weather features. If you subscribed to a plan, your premium features should be active.</p>
+
+<p>To get started, you can visit your settings page: <a href="{{ protocol }}://{{ domain }}{% url 'accounts:settings' %}">Your Account Settings</a></p> {# Adjust URL name if needed #}
+
+<p>If you have any questions, feel free to contact our support.</p>
+
+<p>Thanks,<br />
+The {{ site_name }} Team</p>
+{% endautoescape %}

@@ -6,23 +6,12 @@
 {% block content %}
 <h2>User Settings for {{ user.username }}</h2>
 
-{# Message display area - FIXED STYLE ATTRIBUTE #}
-{% if messages %}
-  <ul class="messages" style="list-style: none; padding: 0; margin: 1em 0;">
-    {% for message in messages %}
-      <li{% if message.tags %} class="{{ message.tags }}" style="padding: 10px; border: 1px solid; margin-bottom: 10px; border-radius: 4px; {% if message.level == 25 %} background-color: #dff0d8; border-color: #d6e9c6; color: #3c763d; {% elif message.level >= 40 %} background-color: #f2dede; border-color: #ebccd1; color: #a94442; {% elif message.level >= 30 %} background-color: #fcf8e3; border-color: #faebcc; color: #8a6d3b; {% else %} background-color: #d9edf7; border-color: #bce8f1; color: #31708f;{% endif %}" {% endif %}>
-        {{ message }}
-      </li>
-    {% endfor %}
-  </ul>
-{% endif %}
-{# End message display #}
-
 <hr>
+
 <h3>Subscription Status</h3>
-<p>You are currently on the <strong>{% if is_subscriber %}Premium{% else %}Free{% endif %}</strong> tier.</p>
+<p>You are currently on the <strong>{% if user.profile.has_premium_access %}Premium{% else %}Free{% endif %}</strong> tier.</p>
 <p>(Allows saving up to {{ max_locations }} location{{ max_locations|pluralize }}.)</p>
-{% if is_subscriber %}
+{% if user.profile.has_premium_access %}
     {# Ensure request.user.subscription exists and has a stripe_customer_id #}
     {% if request.user.subscription and request.user.subscription.stripe_customer_id %}
         <p><a href="{% url 'subscriptions:customer_portal_session' %}" class="btn btn-info mt-2">Manage Subscription & Billing</a></p>
@@ -30,6 +19,7 @@
 {% else %}
     <p><a href="{% url 'subscriptions:plan_selection' %}">Upgrade to Premium?</a></p>
 {% endif %}
+
 
 <hr>
 <h3>Saved Weather Locations</h3>
@@ -133,196 +123,173 @@
 {% endif %}
 {# --- End Conditional Add Forms --- #}
 
-<hr> {# Optional separator #}
-<h3>Alert Notifications</h3>
-<p>Get notified about weather alerts for your saved locations.</p>
-{# --- Add iOS Instructions Div (Initially Hidden) --- #}
-<div id="ios-instructions" class="alert alert-info" style="display: none;" role="alert">
-  <h4 class="alert-heading">Enable Notifications on iPhone/iPad</h4>
-  <p>To receive notifications on this device, you first need to add this website to your Home Screen:</p>
-  <ol>
-    <li>Tap the 'Share' button <img src="{% static 'images/icons/Icon_512.jpg' %}" alt="iOS Share Icon" style="height:1.2em; vertical-align: middle;"> in Safari (usually at the bottom or top).</li>
-    <li>Scroll down and tap 'Add to Home Screen'.</li>
-    <li>Tap 'Add'.</li>
-    <li>Close Safari and open the newly added "Weather App" icon from your Home Screen.</li>
-    <li>Navigate back to this Settings page *within the Home Screen app* and then tap the 'Subscribe' button below.</li>
-  </ol>
+<br>
+
+<button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#pushNotificationModal">
+  Manage Push Notifications
+</button>
+
+<br>
+
+<div class="modal fade" id="pushNotificationModal" tabindex="-1" aria-labelledby="pushNotificationModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="pushNotificationModalLabel">Push Notification Settings</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                {# This is where your iOS instructions, status message, buttons, etc. go #}
+                {# Ensure elements inside here have IDs like 'subscribe-button-modal', 'push-status-message-modal' etc. #}
+
+                <div id="ios-instructions-modal" class="alert alert-info" style="display: none;" role="alert">
+                    <h6 class="alert-heading fw-bold">Enable Notifications on iPhone/iPad</h6>
+                    <p style="font-size: 0.9em;">To receive alerts on this device, please first add this website to your Home Screen:</p>
+                    <ol style="font-size: 0.9em; padding-left: 1.2em; margin-bottom: 0;">
+                        <li>In Safari, tap the 'Share' button 
+                            <img src="{% static 'images/icons/ios_share_icon.png' %}" alt="iOS Share Icon" style="height:1.2em; vertical-align: middle; display: inline;"> 
+                            (usually at the bottom).</li>
+                        <li>Scroll down and tap 'Add to Home Screen'.</li>
+                        <li>Tap 'Add' in the top right.</li>
+                        <li>Close Safari, then open the app from your Home Screen.</li>
+                        <li>Come back to this "Manage Push Notifications" pop-up *within the Home Screen app* to subscribe.</li>
+                    </ol>
+                </div>
+
+                <p id="push-status-message-modal" class="mb-3">Checking your push notification status...</p>
+
+                <div class="d-grid gap-2">
+                    <button id="subscribe-button-modal" class="btn btn-success" style="display:none;">Subscribe to Alerts</button>
+                    <button id="unsubscribe-button-modal" class="btn btn-danger" style="display:none;">Unsubscribe from Alerts</button>
+                </div>
+
+                <div id="push-error-message-modal" class="text-danger mt-2 small"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
 </div>
-{# --- End iOS Instructions Div --- #}
+
+<hr>
+<div class="family-management-section mt-4">
+
+    {# This combined if/elif/endif block correctly handles all cases #}
+    {% if is_family_owner %}
+        {# This is the UI for the Family Plan OWNER #}
+        <h3>Family Plan Management</h3>
+        <p>You can invite up to {{ family_plan_limit }} members to share your premium benefits.</p>
+
+        {# Display Current Members with a "Remove" button for each #}
+        <div class="mt-4">
+            <h5>Current Family Members ({{ family_members.count }}/{{ family_plan_limit }})</h5>
+            {% if family_members %}
+                <ul class="list-group">
+                    {% for member in family_members %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>{{ member.username }} ({{ member.email }})</span>
+                            <form action="{% url 'accounts:remove_family_member' member.id %}" method="post" onsubmit="return confirm('Are you sure you want to remove {{ member.username }} from your family?');">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-outline-danger btn-sm">Remove</button>
+                            </form>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="text-muted">You haven't added any members yet.</p>
+            {% endif %}
+        </div>
+
+        {# Display Pending Invitations #}
+        <div class="mt-4">
+            <h5>Pending Invitations</h5>
+            {% if pending_invitations %}
+                <ul class="list-group">
+                    {% for invitation in pending_invitations %}
+                        <li class="list-group-item">{{ invitation.email_to_invite }} - <small class="text-muted">Sent on {{ invitation.created_at|date:"M d, Y" }}</small></li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="text-muted">No pending invitations.</p>
+            {% endif %}
+        </div>
+
+        {# Invitation Form #}
+        {% if can_invite_more %}
+            <div class="mt-4">
+                <h5>Invite a New Member</h5>
+                <form method="post" action="{% url 'accounts:settings' %}">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="{{ invitation_form.email.id_for_label }}" class="form-label">{{ invitation_form.email.label }}</label>
+                        {{ invitation_form.email }}
+                        {% if invitation_form.email.errors %}
+                            <div class="text-danger small mt-1">
+                                {% for error in invitation_form.email.errors %}
+                                    <p class="mb-0">{{ error }}</p>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    <button type="submit" name="send_invitation" class="btn btn-primary">Send Invitation</button>
+                </form>
+            </div>
+        {% else %}
+            <p class="mt-4 alert alert-warning">You have reached your invitation limit of {{ family_plan_limit }} members.</p>
+        {% endif %}
+
+    {% elif is_family_member %}
+        {# This is the UI for a FAMILY MEMBER who is NOT the owner #}
+        <h3>Family Plan Status</h3>
+        <p>You are currently a member of a family plan, which grants you premium access.</p>
+        <form action="{% url 'accounts:leave_family' %}" method="post" onsubmit="return confirm('Are you sure you want to leave this family plan? You will lose premium access.');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-warning">Leave Family Plan</button>
+        </form>
+    {% endif %}
+</div>
+
+{# Location Sharing UI - this should appear for both owners and members #}
+{% if is_family_owner or is_family_member %}
+<hr>
+<div class="location-sharing-section mt-4">
+    <h3>Family Map Location Sharing</h3>
+    <p class="text-muted">By enabling this feature, your location will be periodically shared with your family members and will only be displayed on the Family Map if you are in an NWS-warned area.</p>
+    <div class="form-check form-switch fs-5">
+        <input class="form-check-input" type="checkbox" role="switch" id="location-sharing-toggle">
+        <label class="form-check-label" for="location-sharing-toggle" id="location-sharing-status">Location Sharing is OFF</label>
+    </div>
+    <div id="location-sharing-error" class="text-danger small mt-1"></div>
+</div>
+{% endif %}
 
 
-{# Add 'disabled' attribute initially #}
-<button type="button" id="subscribe-push-btn" class="btn btn-info" disabled>Subscribe to Alert Notifications</button>
-<span id="push-status" style="margin-left: 10px; font-style: italic;"></span>
-
+{% if user.profile.has_premium_access %}
+<div class="mt-4 p-3 border border-danger rounded">
+    <h4>Delete Account</h4>
+    <p class="text-danger">Permanently delete your account and all associated data. This action cannot be undone. If you have an active subscription, you will be guided to cancel it first.</p>
+    <a href="{% url 'accounts:delete_account_confirm' %}" class="btn btn-danger">Request Account Deletion</a>
+</div>
+{% endif %}
 {% endblock %} {# End of content block #}
 
-
-{# --- Combined & Corrected JavaScript in extra_js block --- #}
 {% block extra_js %}
+
+{# This script block defines constants needed by your external push_manager_modal.js #}
+{% if vapid_public_key %}
 <script>
-        // Helper function to get CSRF token from cookie (Django standard)
-        function getCookie(name) {
-            let cookieValue = null;
-            if (document.cookie && document.cookie !== '') {
-                const cookies = document.cookie.split(';');
-                for (let i = 0; i < cookies.length; i++) {
-                    const cookie = cookies[i].trim();
-                    // Does this cookie string begin with the name we want?
-                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                        break;
-                    }
-                }
-            }
-            return cookieValue;
-        }
-        const csrftoken = getCookie('csrftoken');
-
-    // Helper function (keep as before)
-    function urlBase64ToUint8Array(base64String) {
-        // ... (same function content) ...
-         const padding = '='.repeat((4 - base64String.length % 4) % 4);
-         const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
-         const rawData = window.atob(base64);
-         const outputArray = new Uint8Array(rawData.length);
-         for (let i = 0; i < rawData.length; ++i) { outputArray[i] = rawData.charCodeAt(i); }
-         return outputArray;
-    }
-
-    // Function to check for iOS
-    function isIOS() {
-        return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    }
-
-    // Function to check if running as PWA/Standalone (Added to Home Screen)
-    function isStandalone() {
-        return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-    }
-
-
-    document.addEventListener('DOMContentLoaded', function() {
-        console.log("Settings page JS loaded and DOM ready.");
-
-        // --- Geolocation Logic (Keep as before) ---
-        const geoButton = document.getElementById('use-location-btn');
-        const geoStatus = document.getElementById('geo-status');
-        const geoForm = document.getElementById('geo-form');
-        const latInput = document.getElementById('geo_latitude');
-        const lonInput = document.getElementById('geo_longitude');
-
-        if (geoButton) {
-            console.log("Geo button found, adding listener.");
-            geoButton.addEventListener('click', function() { /* ... existing geolocation click logic ... */
-                console.log("Geo button clicked!");
-                 if (!geoStatus || !geoForm || !latInput || !lonInput) { console.error("Geo form elements missing..."); if(geoStatus) geoStatus.textContent='Error: Internal form elements missing.'; return; }
-                 geoStatus.textContent = 'Requesting location...'; console.log("Requesting geolocation...");
-                 if (!navigator.geolocation) { geoStatus.textContent = 'Geolocation not supported.'; console.error("Geolocation not supported."); }
-                 else { navigator.geolocation.getCurrentPosition(geoSuccessCallback, geoErrorCallback, {enableHighAccuracy: false, timeout: 10000, maximumAge: 0}); }
-            });
-        } else { console.warn("Geo button (#use-location-btn) not found or not visible."); }
-        function geoSuccessCallback(position) { /* ... existing success logic ... */
-            const latitude = position.coords.latitude; const longitude = position.coords.longitude; console.log("Geolocation success:", latitude, longitude);
-            if (!geoStatus || !geoForm || !latInput || !lonInput) { console.error("Geo form elements missing before submit!"); if(geoStatus) geoStatus.textContent = 'Error: Internal form elements missing before submit.'; return; }
-            geoStatus.textContent = 'Location found! Saving...'; latInput.value = latitude; lonInput.value = longitude; console.log("Submitting hidden geo form..."); geoForm.submit();
-        }
-        function geoErrorCallback(error) { /* ... existing error logic ... */
-            let message = 'Error retrieving location: '; switch(error.code) { case error.PERMISSION_DENIED: message += "Permission denied."; break; case error.POSITION_UNAVAILABLE: message += "Location unavailable."; break; case error.TIMEOUT: message += "Request timed out."; break; case error.UNKNOWN_ERROR: message += "Unknown error."; break; }
-            if(geoStatus) { geoStatus.textContent = message; } console.error("Geolocation Error Code: " + error.code + ", Message: " + error.message);
-         }
-        // --- End Geolocation Logic ---
-
-
-        // --- Push Notification Logic ---
-        const subscribeButton = document.getElementById('subscribe-push-btn');
-        const pushStatus = document.getElementById('push-status');
-        const iosInstructions = document.getElementById('ios-instructions'); // Get instruction div
-        const vapidPublicKey = '{{ vapid_public_key|default:"" }}';
-
-        if (subscribeButton && pushStatus && iosInstructions) { // Check elements exist
-             if (!vapidPublicKey) {
-                console.error('VAPID Public Key missing.');
-                pushStatus.textContent = 'Error: Push config missing.';
-                subscribeButton.disabled = true;
-                return; // Stop if no VAPID key
-             }
-
-             const onIOS = isIOS();
-             const runningStandalone = isStandalone();
-             console.log(`iOS: ${onIOS}, Standalone: ${runningStandalone}`);
-
-             if (onIOS && !runningStandalone) {
-                // On iOS but NOT running from Home Screen
-                console.log("iOS detected, not standalone. Showing instructions.");
-                iosInstructions.style.display = 'block'; // Show instructions
-                pushStatus.textContent = 'Add to Home Screen first.';
-                subscribeButton.disabled = true; // Keep button disabled
-             } else if ('serviceWorker' in navigator && 'PushManager' in window && Notification) {
-                // Either NOT iOS, OR IS iOS and running standalone
-                console.log('Push Notifications potentially supported and allowed in this context.');
-                iosInstructions.style.display = 'none'; // Hide instructions
-                subscribeButton.disabled = false; // Enable the button
-
-                subscribeButton.addEventListener('click', function() {
-                    // --- Existing subscription logic goes here ---
-                    pushStatus.textContent = 'Requesting permission...';
-                    Notification.requestPermission().then((permission) => {
-                        if (permission === 'granted') {
-                            console.log('Push permission granted.');
-                            pushStatus.textContent = 'Registering service worker...';
-                            navigator.serviceWorker.ready.then(function(registration) {
-                                    console.log('Service Worker registered:', registration);
-                                    pushStatus.textContent = 'Subscribing...';
-                                    const subscribeOptions = {
-                                        userVisibleOnly: true,
-                                        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
-                                    };
-                                    return registration.pushManager.subscribe(subscribeOptions);
-                                })
-                                .then(function(subscription) {
-                                    // ... (Log subscription, Send to server logic) ...
-                                    console.log("Subscription JSON:", JSON.stringify(subscription));
-                                    pushStatus.textContent = 'Subscribing... Sending to server...';
-                                    // --- Fetch Call to Save Subscription ---
-                                    fetch("{% url 'subscriptions:save_push_subscription' %}", {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
-                                        body: JSON.stringify(subscription.toJSON())
-                                    })
-                                    .then(response => { /* ... handle response ... */
-                                        if (!response.ok) { return response.json().then(data => { throw new Error(data.message || `Server error: ${response.status}`); }); }
-                                        return response.json();
-                                    })
-                                    .then(data => { /* ... update pushStatus ... */
-                                        if (data.status === 'success') { console.log('Sub saved.'); pushStatus.textContent = 'Subscription active!'; }
-                                        else { console.error('Server error:', data.message); pushStatus.textContent = 'Save failed: ' + (data.message || 'Unknown server error'); }
-                                    })
-                                    .catch(error => { /* ... update pushStatus on fetch error ... */
-                                         console.error('Error sending sub:', error); pushStatus.textContent = 'Save failed: ' + error.message;
-                                    });
-                                    // --- End Fetch Call ---
-                                })
-                                .catch(function(err) { /* ... handle registration/subscribe error ... */
-                                     console.error('SW registration or Push subscription failed:', err); pushStatus.textContent = 'Subscription failed: ' + err.message;
-                                });
-                        } else { /* ... handle permission denied ... */
-                            console.warn('Push permission denied.'); pushStatus.textContent = 'Permission denied.';
-                        }
-                    }); // End Notification.requestPermission().then
-                }); // End click listener
-                // --- End Existing subscription logic ---
-
-             } else {
-                 // Push not supported by browser (outside iOS check)
-                 console.warn('Push notifications or Service Workers not supported.');
-                 pushStatus.textContent = 'Push not supported by this browser.';
-                 subscribeButton.disabled = true;
-             }
-        } else {
-             console.error("Push Notification related elements not found.");
-        }
-        // --- End Push Notification Logic ---
-
-    }); // End DOMContentLoaded listener
+    // These constants are made available globally for push_manager_modal.js to use
+    const VAPID_PUBLIC_KEY = "{{ vapid_public_key|escapejs }}"; 
+    const SAVE_SUBSCRIPTION_URL = "{% url 'subscriptions:save_push_subscription'|escapejs %}"; 
+    const DELETE_SUBSCRIPTION_URL = "{% url 'subscriptions:delete_push_subscription'|escapejs %}"; 
+    const UPDATE_LOCATION_URL = "{% url 'accounts:update_location'|escapejs %}";
+    const SHOULD_TRACK_URL = "{% url 'accounts:should_track_location'|escapejs %}";
 </script>
-{% endblock %}
+{% endif %}
+
+{# This line loads your external JavaScript file where all the modal and push logic resides #}
+{# Ensure the path and filename 'js/push_manager_modal.js' are correct #}
+<script src="{% static 'js/push_manager_modal.js' %}"></script>
+<script src="{% static 'js/location_tracker.js' %}"></script>
+{% endblock extra_js %}

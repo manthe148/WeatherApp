@@ -1,0 +1,13 @@
+{% autoescape off %}
+Hi {{ user_username }},
+
+This email confirms that your account with {{ site_name }} has now been deleted as per your request.
+
+We're sorry to see you go! We're always trying to improve, and your feedback would be incredibly valuable to us. If you have a moment, we'd be grateful if you could let us know why you decided to leave by filling out this short questionnaire:
+
+YOUR_QUESTIONNAIRE_LINK_HERE
+
+Thanks for using our site!
+
+The {{ site_name }} Team
+{% endautoescape %}

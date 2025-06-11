@@ -1,15 +1,181 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
+{% load static %} 
 
-{% block title %}Sign Up{% endblock %}
+{% block title %}Sign Up - {{ block.super }}{% endblock %}
 
 {% block content %}
-<h2>Sign Up</h2>
-<form method="post">
-    {% csrf_token %}
-<div class="mb-3">
-    {{ form.as_p }} {# Renders Username, Password, Password confirmation fields #}
-</div>    
-    <button class='btn btn-primary' type="submit">Sign Up</button>
-</form>
-<p style="margin-top: 1em;">Already have an account? <a href="{% url 'accounts:login' %}">Log In</a></p>
+<div class="container mt-5 mb-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-7">
+            <div class="card shadow-sm">
+                <div class="card-header bg-success text-white">
+                    <h3 class="mb-0 text-center">Create Your Account</h3>
+                </div>
+                <div class="card-body p-4">
+                    {# The action can be empty to submit to the current URL, or use the named URL #}
+                    {# Assuming your signup URL is named 'signup' and possibly namespaced 'accounts' #}
+                    {# If your main urls.py has path('accounts/signup/', accounts_views.sign_up, name='signup') #}
+                    {# and accounts/urls.py does NOT have app_name, then {% url 'signup' %} might work. #}
+                    {# If accounts/urls.py has app_name = 'accounts', then {% url 'accounts:signup' %} #}
+                    {# Using action="" is often safest if the view handles both GET and POST for this URL. #}
+                    <form method="post" action=""> 
+                        {% csrf_token %}
+
+                        {% if form.non_field_errors %}
+                            <div class="alert alert-danger" role="alert">
+                                {% for error in form.non_field_errors %}
+                                    <p class="mb-0">{{ error }}</p>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+
+                        {# Username (from UserCreationForm) #}
+                        <div class="mb-3">
+                            <label for="{{ form.username.id_for_label }}" class="form-label">{{ form.username.label_tag }}</label>
+                            <input type="text" name="{{ form.username.name }}" id="{{ form.username.id_for_label }}"
+                                   class="form-control form-control-lg {% if form.username.errors %}is-invalid{% endif %}"
+                                   value="{{ form.username.value|default:'' }}"
+                                   placeholder="Choose a username"
+                                   required autofocus autocomplete="username">
+                            
+                            {# --- MODIFIED/ADDED HELP TEXT SECTION --- #}
+                            {% if form.username.help_text or form.username.errors %}
+                                <div class="mt-1"> {# Add a little margin for spacing #}
+                                    {% if form.username.help_text %}
+                                        <small class="form-text text-muted">{{ form.username.help_text|safe }}</small><br>
+                                    {% endif %}
+                                    <small class="form-text text-muted"><strong>Note:</strong> Username is case-sensitive.</small>
+                                </div>
+                            {% else %}
+                                <small class="form-text text-muted mt-1"><strong>Note:</strong> Username is case-sensitive.</small>
+                            {% endif %}
+                            {# --- END HELP TEXT SECTION --- #}
+                            
+                            {% if form.username.errors %}
+                                <div class="invalid-feedback d-block"> {# d-block ensures it shows #}
+                                    {% for error in form.username.errors %}{{ error }}{% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+
+                            {# Email (added in UserSignUpForm) #}
+                        <div class="mb-3">
+                            <label for="{{ form.email.id_for_label }}" class="form-label">{{ form.email.label_tag }}</label>
+                            <input type="email" name="{{ form.email.name }}" id="{{ form.email.id_for_label }}"
+                                   class="form-control form-control-lg {% if form.email.errors %}is-invalid{% endif %}"  {# <<< ADDED BOOTSTRAP CLASSES HERE #}
+                                   value="{{ form.email.value|default:'' }}"
+                                   placeholder="your@email.com"
+                                   required autocomplete="email">
+                            {% if form.email.help_text %}<small class="form-text text-muted">{{ form.email.help_text|safe }}</small>{% endif %} {# Added |safe filter #}
+                            {% if form.email.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.email.errors %}{{ error }}{% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        {# First Name #}
+                        <div class="mb-3">
+                            <label for="{{ form.first_name.id_for_label }}" class="form-label">{{ form.first_name.label_tag }}</label>
+                            <input type="text" name="{{ form.first_name.name }}" id="{{ form.first_name.id_for_label }}"
+                                   class="form-control form-control-lg {% if form.first_name.errors %}is-invalid{% endif %}"
+                                   value="{{ form.first_name.value|default:'' }}"
+                                   placeholder="Your first name"
+                                   autocomplete="given-name">
+                            {% if form.first_name.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.first_name.errors %}{{ error }}{% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        {# Last Name #}
+                        <div class="mb-3">
+                            <label for="{{ form.last_name.id_for_label }}" class="form-label">{{ form.last_name.label_tag }}</label>
+                            <input type="text" name="{{ form.last_name.name }}" id="{{ form.last_name.id_for_label }}"
+                                   class="form-control form-control-lg {% if form.last_name.errors %}is-invalid{% endif %}"
+                                   value="{{ form.last_name.value|default:'' }}"
+                                   placeholder="Your last name"
+                                   autocomplete="family-name">
+                            {% if form.last_name.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.last_name.errors %}{{ error }}{% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        {# Password 1 #}
+                        <div class="mb-3">
+                            <label for="{{ form.password1.id_for_label }}" class="form-label">{{ form.password1.label_tag }}</label>
+                            <input type="password" name="{{ form.password1.name }}" id="{{ form.password1.id_for_label }}"
+                                   class="form-control form-control-lg {% if form.password1.errors %}is-invalid{% endif %}"
+                                   placeholder="Create a password"
+                                   required autocomplete="new-password">
+                            {% if form.password1.help_text %}<small class="form-text text-muted">{{ form.password1.help_text|safe }}</small>{% endif %}
+                            {% if form.password1.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.password1.errors %}{{ error }}{% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        {# Password 2 (Confirmation) #}
+                        <div class="mb-3">
+                            <label for="{{ form.password2.id_for_label }}" class="form-label">{{ form.password2.label_tag }}</label>
+                            <input type="password" name="{{ form.password2.name }}" id="{{ form.password2.id_for_label }}"
+                                   class="form-control form-control-lg {% if form.password2.errors %}is-invalid{% endif %}"
+                                   placeholder="Confirm your password"
+                                   required autocomplete="new-password">
+                            {% if form.password2.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.password2.errors %}{{ error }}{% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        {# Town #}
+                        <div class="mb-3">
+                            <label for="{{ form.town.id_for_label }}" class="form-label">{{ form.town.label_tag }}</label>
+                            <input type="text" name="{{ form.town.name }}" id="{{ form.town.id_for_label }}"
+                                   class="form-control form-control-lg {% if form.town.errors %}is-invalid{% endif %}"
+                                   value="{{ form.town.value|default:'' }}"
+                                   placeholder="Your town/city (Optional)"
+                                   autocomplete="address-level2">
+                            {% if form.town.help_text %}<small class="form-text text-muted">{{ form.town.help_text }}</small>{% endif %}
+                            {% if form.town.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.town.errors %}{{ error }}{% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        {# State #}
+                        <div class="mb-3">
+                            <label for="{{ form.state.id_for_label }}" class="form-label">{{ form.state.label_tag }}</label>
+                            <input type="text" name="{{ form.state.name }}" id="{{ form.state.id_for_label }}"
+                                   class="form-control form-control-lg {% if form.state.errors %}is-invalid{% endif %}"
+                                   value="{{ form.state.value|default:'' }}"
+                                   placeholder="Your state/province (Optional)"
+                                   autocomplete="address-level1">
+                            {% if form.state.help_text %}<small class="form-text text-muted">{{ form.state.help_text }}</small>{% endif %}
+                            {% if form.state.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.state.errors %}{{ error }}{% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="d-grid mt-4">
+                            <button type="submit" class="btn btn-success btn-lg">Sign Up</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="card-footer text-center py-3">
+                    <p class="mb-0">Already have an account? <a href="{% url 'login' %}">Log In</a></p> {# Use 'login' if that's your global/namespaced name #}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

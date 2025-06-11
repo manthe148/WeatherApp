@@ -23,5 +23,6 @@ urlpatterns = [
     path('checkout/cancel/', SubscriptionCancelView.as_view(), name='cancel'),
     path('webhook/', stripe_webhook_view, name='stripe_webhook'),
     path('save-push-subscription/', save_push_subscription_view, name='save_push_subscription'),
-    path('manage-subscription/', create_customer_portal_session_view, name='customer_portal_session')
+    path('manage-subscription/', create_customer_portal_session_view, name='customer_portal_session'),
+    path('delete-push-subscription/', views.delete_push_subscription_view, name='delete_push_subscription'),
 ]
