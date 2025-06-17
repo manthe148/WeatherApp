@@ -57,7 +57,7 @@ def fetch_alerts_by_point(latitude, longitude, task_user_agent):
     except Exception as e:
         print(f"HELPER_ERROR: NWS Alerts API Error for ({latitude},{longitude}): {e}")
     return active_alerts_details
-''''
+
 def fetch_active_alerts_with_polygons(task_user_agent):
     """Fetches all active, high-priority NWS warning polygons once."""
     active_warnings = []
@@ -171,66 +171,3 @@ def process_all_alerts():
 
     end_time = datetime.now(timezone.utc)
     print(f"[{end_time.isoformat()}] --- UNIFIED ALERT TASK FINISHED. Duration: {end_time - start_time} ---")
-'''
-def process_all_alerts():
-    """
-    A single, unified task to check for NWS alerts for users' SAVED locations
-    and send push notifications with robust de-duplication logic.
-    """
-    start_time = datetime.now(timezone.utc)
-    print(f"[{start_time.isoformat()}] --- TASK START: process_all_alerts ---")
-    task_user_agent = f"UnfortunateNeighborWeather/1.0 (AlertCheckerTask; {settings.DEFAULT_FROM_EMAIL})"
-    
-    users_to_check = User.objects.filter(webpushdevice__active=True).distinct().prefetch_related(
-        'profile__saved_locations', 
-        'webpushdevice_set'
-    )
-
-    for user in users_to_check:
-        if not hasattr(user, 'profile'):
-            continue
-
-        pushed_event_types_in_this_run = set()
-        already_notified_ids = set(
-            NotifiedAlert.objects.filter(user=user).values_list('nws_alert_id', flat=True)
-        )
-        
-        locations_to_monitor = user.profile.saved_locations.filter(receive_notifications=True)
-        if not user.profile.has_premium_access:
-            locations_to_monitor = locations_to_monitor.filter(is_default=True)
-        
-        if not locations_to_monitor.exists():
-            continue
-
-        for loc_instance in locations_to_monitor:
-            # This line now correctly calls the helper function defined above
-            current_nws_alerts = fetch_alerts_by_point(loc_instance.latitude, loc_instance.longitude, task_user_agent)
-
-            for alert in current_nws_alerts:
-                nws_alert_id = alert.get('id')
-                event_name = alert.get('event')
-
-                if not (nws_alert_id and event_name): continue
-
-                if nws_alert_id in already_notified_ids or event_name in pushed_event_types_in_this_run:
-                    continue
-                
-                print(f"  -> NEW Personal Alert '{event_name}' for {user.username}")
-                base_url = settings.SITE_DOMAIN.rstrip('/')
-                payload = json.dumps({
-                    "head": f"{event_name} for your saved location: {loc_instance.location_name}", "body": alert.get('headline'),
-                    "icon": f"{base_url}{settings.STATIC_URL}images/icons/Icon_192.png", "url": f"{base_url}{reverse('weather:weather_page')}"
-                })
-                try:
-                    user.webpushdevice_set.filter(active=True).send_message(payload)
-                    NotifiedAlert.objects.create(user=user, nws_alert_id=nws_alert_id, saved_location=loc_instance)
-                    pushed_event_types_in_this_run.add(event_name)
-                    print(f"    -> SUCCESS: Sent PERSONAL alert to {user.username}.")
-                except Exception as e:
-                    print(f"    -> FAILED to send personal alert to {user.username}: {e}")
-    
-    # NOTE: The Family Map logic has been removed from this task to keep it focused on solving the primary alert issue.
-    # We can add the family check back in a separate task once this is working perfectly.
-
-    end_time = datetime.now(timezone.utc)
-    print(f"[{end_time.isoformat()}] --- TASK FINISHED ---")
