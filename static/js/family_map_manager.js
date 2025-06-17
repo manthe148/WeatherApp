@@ -73,8 +73,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // The main condition: Only display a marker if the user is in a warned area.
             if (member.is_in_warned_area) {
-                console.log(`%c[DEBUGGER] Pausing execution for warned member: ${member.username}.`, 'color: blue; font-weight: bold;');
-                console.log(`[DEBUGGER] Go to the 'Sources' tab to step through code, or 'Console' to inspect variables.`);
 
                 // <<< THIS LINE WILL PAUSE THE SCRIPT
 

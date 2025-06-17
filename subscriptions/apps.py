@@ -9,6 +9,7 @@ class SubscriptionsConfig(AppConfig):
     name = 'subscriptions'
 
     def ready(self):
+     ''''
         # --- Schedule the push notification task ---
         # Make sure these imports are within ready() or at file top
         from django_q.tasks import schedule, Schedule # Import Schedule model
@@ -16,7 +17,7 @@ class SubscriptionsConfig(AppConfig):
 
         task_path = 'subscriptions.tasks.check_weather_alerts_and_send_pushes'
         schedule_name = 'Check Weather Alerts & Send Pushes'
-        desired_interval_minutes = 10 # Set desired interval
+        desired_interval_minutes = 5 # Set desired interval
 
         try:
             # Try to get the existing schedule
@@ -51,3 +52,5 @@ class SubscriptionsConfig(AppConfig):
             print("If this is not the first run, check your database and django_q setup.")
 
         # --- End Task Scheduling ---
+    '''
+    pass

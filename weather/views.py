@@ -18,7 +18,7 @@ from django.utils import timezone as django_utils_tz # Alias for django.utils.ti
 # Your other imports
 from .grib_processing import get_gfs_image_details_with_fallback, get_latest_nam_rundate_and_hour
 from subscriptions.models import Subscription # Assuming this is your model
-from subscriptions.tasks import fetch_alerts_by_zone_or_point, get_nws_zone_for_coords # Assuming this is where it is
+from subscriptions.tasks import fetch_alerts_by_point, get_nws_zone_for_coords # Assuming this is where it is
 
 # --- Configuration Dictionaries ---
 AVAILABLE_GFS_PARAMETERS_CONFIG = {
